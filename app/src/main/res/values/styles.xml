@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.CircleStream" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="android:statusBarColor">#0F0F12</item>
+        <item name="android:navigationBarColor">#0F0F12</item>
+        <item name="android:windowBackground">#0F0F12</item>
+    </style>
+</resources>

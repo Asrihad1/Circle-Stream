@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Primary target for CircleUpdateManager APK downloads -->
+    <external-cache-path
+        name="external_apk_cache"
+        path="." />
+
+    <!-- Fallback internal cache directory if external storage is unavailable -->
+    <cache-path
+        name="internal_apk_cache"
+        path="." />
+
+    <!-- External app-specific files directory -->
+    <external-files-path
+        name="external_files"
+        path="." />
+</paths>
+

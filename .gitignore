@@ -1,0 +1,47 @@
+# Built application files
+*.apk
+*.aab
+
+# Gradle files
+.gradle/
+build/
+/build
+app/build/
+/app/build
+
+# Local configuration & credentials (CRITICAL SECURITY)
+local.properties
+/local.properties
+keystore.jks
+*.jks
+*.keystore
+
+# Android Studio & IDE
+*.iml
+.idea/
+/.idea/
+.vscode/
+.kotlin/
+.agents/
+.DS_Store
+/captures
+.externalNativeBuild
+.cxx
+
+# Temporary / scratch directories
+tmp_common/
+tmp_exoplayer/
+androidx/
+*.class
+
+# Scratch text / audit files from debugging
+legendary_home_part*.txt
+old_home.txt
+original_HomeScreen*.txt
+original_HomeScreen.kt
+step_*_home.kt
+iptvidn_*.html
+iptvidn_audit.json
+iptv_channels_cleaned.json
+embed_tsports.html
+classes.jar
