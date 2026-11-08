@@ -45,3 +45,5 @@ iptvidn_audit.json
 iptv_channels_cleaned.json
 embed_tsports.html
 classes.jar
+
+/app/google-services.json
