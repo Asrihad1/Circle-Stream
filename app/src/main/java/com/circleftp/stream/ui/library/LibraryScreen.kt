@@ -35,7 +35,6 @@ import com.circleftp.stream.data.local.WatchHistoryEntity
 import com.circleftp.stream.data.local.WatchLaterEntity
 import com.circleftp.stream.data.sync.AuthSyncManager
 import com.circleftp.stream.ui.theme.*
-import com.circleftp.stream.utils.WortiseManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -136,9 +135,7 @@ fun LibraryScreen(
                                 WatchLaterCard(
                                     item = item,
                                     onClick = {
-                                        WortiseManager.showAd(context) {
-                                            onPlayWatchLater(item)
-                                        }
+                                        onPlayWatchLater(item)
                                     },
                                     onDelete = {
                                         coroutineScope.launch {
@@ -170,9 +167,7 @@ fun LibraryScreen(
                                 WatchedCard(
                                     item = item,
                                     onClick = {
-                                        WortiseManager.showAd(context) {
-                                            onPlayMedia(item)
-                                        }
+                                        onPlayMedia(item)
                                     }
                                 )
                             }

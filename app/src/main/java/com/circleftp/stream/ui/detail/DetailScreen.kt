@@ -41,7 +41,6 @@ import com.circleftp.stream.player.ActivePlayerSession
 import com.circleftp.stream.player.CircleDownloadManager
 import com.circleftp.stream.player.UrlNormalizer
 import com.circleftp.stream.ui.theme.*
-import com.circleftp.stream.utils.WortiseManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -362,9 +361,7 @@ fun DetailScreen(
                                                 availableStreams = resolved.streams
                                             )
                                             isResolvingStream = false
-                                            WortiseManager.showAd(context) {
-                                                onPlay(detail.title, playUrl)
-                                            }
+                                            onPlay(detail.title, playUrl)
                                         } catch (e: Exception) {
                                             isResolvingStream = false
                                             android.util.Log.e("DetailScreen", "Failed to resolve stream: ${e.message}", e)
@@ -499,9 +496,7 @@ fun DetailScreen(
                                                     subtitles = resolved.subtitles,
                                                     availableStreams = resolved.streams
                                                 )
-                                                WortiseManager.showAd(context) {
-                                                    onPlay(ep.title, playUrl)
-                                                }
+                                                onPlay(ep.title, playUrl)
                                             } catch (e: Exception) {
                                                 android.util.Log.e("DetailScreen", "Error resolving episode stream: ${e.message}", e)
                                                 Toast.makeText(context, "Episode stream currently unavailable", Toast.LENGTH_SHORT).show()

@@ -55,7 +55,6 @@ import com.circleftp.stream.player.CircleDownloadManager
 import com.circleftp.stream.player.rememberNetworkSpeed
 import com.circleftp.stream.ui.components.ContinueWatchingRow
 import com.circleftp.stream.ui.theme.*
-import com.circleftp.stream.utils.WortiseManager
 
 /**
  * The Source Dashboard Hub.
@@ -162,28 +161,6 @@ fun HomeScreen(
                     containerColor = CircleDarkBg
                 )
             )
-        },
-        bottomBar = {
-            Surface(
-                color = CircleDarkBg,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Button(
-                    onClick = {
-                        // Uses the specific Ad Unit ID provided by the product owner
-                        WortiseManager.showAd(context, "f6c829c5-e75f-423e-8dff-85e65e9d468d") {
-                            android.widget.Toast.makeText(context, "Video Unlocked", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = CircleRed)
-                ) {
-                    Text("Force Wortise Ad")
-                }
-            }
         },
         containerColor = CircleDarkBg
     ) { padding ->

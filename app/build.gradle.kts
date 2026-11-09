@@ -157,7 +157,4 @@ dependencies {
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-crashlytics")
     implementation("com.google.firebase:firebase-config")
-
-    // Wortise In-App Ad SDK
-    implementation("com.wortise:android-sdk:1.7.+")
 }

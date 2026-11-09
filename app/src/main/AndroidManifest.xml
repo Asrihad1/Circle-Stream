@@ -28,16 +28,6 @@
         android:theme="@style/Theme.CircleStream"
         tools:targetApi="35">
 
-        <!-- Google Mobile Ads (AdMob) Application ID required by Wortise & GMA SDK -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
-
-        <!-- Wortise Monetization App ID -->
-        <meta-data
-            android:name="com.wortise.ads.APP_ID"
-            android:value="09536a53-9f9a-4747-ace2-0125a0a27df1" />
-
         <activity
             android:name=".MainActivity"
             android:exported="true"

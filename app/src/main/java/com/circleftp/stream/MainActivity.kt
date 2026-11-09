@@ -53,7 +53,6 @@ import com.circleftp.stream.ui.theme.TextSecondary
 import com.circleftp.stream.updater.AppUpdater
 import com.circleftp.stream.updater.AutoUpdateDialogHost
 import com.circleftp.stream.updater.CircleUpdateManager
-import com.circleftp.stream.utils.WortiseManager
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -74,13 +73,6 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        // Initialize Wortise Monetization SDK defensively via WortiseManager
-        try {
-            WortiseManager.init(this)
-        } catch (t: Throwable) {
-            android.util.Log.e("MainActivity", "Wortise initialization error", t)
-        }
-
         setContent {
             CircleStreamTheme {
                 CircleStreamApp()
@@ -89,10 +81,10 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Reusable helper function to load and display an interstitial ad with debug logging callbacks.
+     * Reusable helper function for actions requiring interstitial/monetization callback.
      */
     fun showInterstitialAd(onComplete: () -> Unit = {}) {
-        WortiseManager.showAd(this) { onComplete() }
+        onComplete()
     }
 }
 
@@ -213,28 +205,26 @@ fun CircleStreamApp() {
                     navController.navigate("detail/circleftp/$postId")
                 },
                 onResumePlayback = { historyItem ->
-                    WortiseManager.showAd(context) {
-                        val resolvedPostId = historyItem.parentSeriesId?.toLongOrNull()
-                            ?: historyItem.mediaId.removePrefix("series_").removePrefix("movie_").toLongOrNull()
-                            ?: 0L
-                        ActivePlayerSession.set(
-                            mediaId = historyItem.mediaId,
-                            title = historyItem.title,
-                            streamUrl = historyItem.streamUrl,
-                            postId = resolvedPostId,
-                            posterUrl = historyItem.posterUrl,
-                            isSeries = historyItem.isSeries,
-                            seasonNumber = if (historyItem.isSeries) historyItem.seasonNumber else null,
-                            episodeNumber = if (historyItem.isSeries) historyItem.episodeNumber else null,
-                            parentSeriesId = if (historyItem.isSeries) historyItem.parentSeriesId else null,
-                            index = if (historyItem.isSeries && historyItem.episodeNumber != null) {
-                                (historyItem.episodeNumber - 1).coerceAtLeast(0)
-                            } else {
-                                -1
-                            }
-                        )
-                        navController.navigate("player")
-                    }
+                    val resolvedPostId = historyItem.parentSeriesId?.toLongOrNull()
+                        ?: historyItem.mediaId.removePrefix("series_").removePrefix("movie_").toLongOrNull()
+                        ?: 0L
+                    ActivePlayerSession.set(
+                        mediaId = historyItem.mediaId,
+                        title = historyItem.title,
+                        streamUrl = historyItem.streamUrl,
+                        postId = resolvedPostId,
+                        posterUrl = historyItem.posterUrl,
+                        isSeries = historyItem.isSeries,
+                        seasonNumber = if (historyItem.isSeries) historyItem.seasonNumber else null,
+                        episodeNumber = if (historyItem.isSeries) historyItem.episodeNumber else null,
+                        parentSeriesId = if (historyItem.isSeries) historyItem.parentSeriesId else null,
+                        index = if (historyItem.isSeries && historyItem.episodeNumber != null) {
+                            (historyItem.episodeNumber - 1).coerceAtLeast(0)
+                        } else {
+                            -1
+                        }
+                    )
+                    navController.navigate("player")
                 },
                 onOpenSearch = {
                     navController.navigate("search")
@@ -273,9 +263,7 @@ fun CircleStreamApp() {
                                 providerId = "iptvidn",
                                 headers = resolved.headers
                             )
-                            WortiseManager.showAd(context) {
-                                navController.navigate("player")
-                            }
+                            navController.navigate("player")
                         } else {
                             Toast.makeText(context, "Channel stream currently unavailable at source", Toast.LENGTH_SHORT).show()
                         }
@@ -312,9 +300,7 @@ fun CircleStreamApp() {
                 mediaId = mediaId,
                 onBack = { navController.popBackStack() },
                 onPlay = { _, _ ->
-                    WortiseManager.showAd(context) {
-                        navController.navigate("player")
-                    }
+                    navController.navigate("player")
                 }
             )
         }
@@ -331,9 +317,7 @@ fun CircleStreamApp() {
                 onBack = { navController.popBackStack() },
                 onPlay = { _, _ ->
                     ActivePlayerSession.postId = postId
-                    WortiseManager.showAd(context) {
-                        navController.navigate("player")
-                    }
+                    navController.navigate("player")
                 }
             )
         }
@@ -396,9 +380,7 @@ fun CircleStreamApp() {
                             -1
                         }
                     )
-                    WortiseManager.showAd(context) {
-                        navController.navigate("player")
-                    }
+                    navController.navigate("player")
                 },
                 onPlayWatchLater = { item ->
                     val resolvedPostId = item.mediaId.removePrefix("series_").removePrefix("movie_").toLongOrNull() ?: 0L
@@ -410,9 +392,7 @@ fun CircleStreamApp() {
                         posterUrl = item.posterUrl,
                         isSeries = item.isSeries
                     )
-                    WortiseManager.showAd(context) {
-                        navController.navigate("player")
-                    }
+                    navController.navigate("player")
                 },
                 onSelectPostId = { postId ->
                     navController.navigate("detail/$postId")
