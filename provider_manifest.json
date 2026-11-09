@@ -1,10 +1,10 @@
 {
-  "manifest_version": 1,
+  "manifest_version": 2,
   "cdn_ranking_enabled": true,
   "kill_switch": [],
   "providers": [
     { "id": "circleftp", "enabled": true, "priority": 1, "min_version_code": 0 },
-    { "id": "iptvidn", "enabled": true, "priority": 2, "min_version_code": 0 }
+    { "id": "iptvidn", "enabled": true, "priority": 2, "min_version_code": 0 },
+    { "id": "netmirror", "enabled": true, "priority": 3, "min_version_code": 0 }
   ]
 }
-

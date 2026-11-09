@@ -91,7 +91,7 @@ class CircleCustomRenderersFactory(
         // 2. Hardware / System MediaCodec Audio Renderer with safe fallback
         super.buildAudioRenderers(
             context,
-            EXTENSION_RENDERER_MODE_OFF,
+            EXTENSION_RENDERER_MODE_PREFER,
             mediaCodecSelector,
             enableDecoderFallback,
             audioSink,
@@ -146,10 +146,22 @@ object CircleVideoPlayerFactory {
         .connectionPool(ConnectionPool(8, 5, TimeUnit.MINUTES))
         .addInterceptor { chain ->
             val original = chain.request()
-            val requestWithUa = original.newBuilder()
-                .header("User-Agent", USER_AGENT)
-                .build()
-            chain.proceed(requestWithUa)
+            val requestBuilder = original.newBuilder()
+            
+            // Inject dynamic headers from ActivePlayerSession (Referer, Origin, Custom Auth)
+            val sessionHeaders = ActivePlayerSession.headers
+            for ((key, value) in sessionHeaders) {
+                if (key.isNotBlank() && value.isNotBlank()) {
+                    requestBuilder.header(key, value)
+                }
+            }
+
+            // Always ensure browser User-Agent is set if missing
+            if (original.header("User-Agent").isNullOrBlank()) {
+                requestBuilder.header("User-Agent", USER_AGENT)
+            }
+
+            chain.proceed(requestBuilder.build())
         }
         .retryOnConnectionFailure(true)
         .followRedirects(true)

@@ -207,6 +207,7 @@ fun HomeScreen(
                             badgeBgColor = Color(0xFFB71C1C),
                             icon = Icons.Default.LiveTv,
                             modifier = Modifier.weight(1f),
+                            sideNote = "Only limited Wi-Fi users can access this (BDIX)",
                             onClick = onOpenLiveTv
                         )
                         // Movies & Shows Card
@@ -218,6 +219,7 @@ fun HomeScreen(
                             badgeBgColor = Color(0xFF004D40),
                             icon = Icons.Default.Movie,
                             modifier = Modifier.weight(1f),
+                            sideNote = "Only limited Wi-Fi users can access this (BDIX)",
                             onClick = { onSelectProvider("circleftp") }
                         )
                     }
@@ -423,6 +425,15 @@ private data class ProviderVisualMeta(
 
 private fun getProviderVisualMeta(provider: MediaSourceProvider): ProviderVisualMeta {
     return when (provider.providerId.lowercase()) {
+        "netmirror" -> ProviderVisualMeta(
+            icon = Icons.Default.Movie,
+            accentColor = CircleRed,
+            badgeText = "Global Internet",
+            badgeBgColor = Color(0xFF5A0000),
+            badgeTextColor = Color(0xFFFF8A80),
+            subtitle = "Global Cloud Mirror",
+            description = "Watch movies and series from any Wi-Fi or mobile data network worldwide."
+        )
         "circleftp", "circle_ftp" -> ProviderVisualMeta(
             icon = Icons.Default.Bolt,
             accentColor = Color(0xFF00E676),
@@ -465,6 +476,7 @@ fun HeroWatchModeCard(
     badgeBgColor: Color,
     icon: ImageVector,
     modifier: Modifier = Modifier,
+    sideNote: String? = null,
     onClick: () -> Unit
 ) {
     Card(
@@ -548,6 +560,18 @@ fun HeroWatchModeCard(
                     color = TextSecondary,
                     maxLines = 1
                 )
+
+                if (!sideNote.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = sideNote,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFFFFB74D), // Warning amber
+                        lineHeight = 12.sp,
+                        maxLines = 2
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
