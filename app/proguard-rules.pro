@@ -57,7 +57,13 @@
     public static int i(...);
 }
 
-# 8. Wortise In-App Ad SDK ProGuard Rules
+# 8. Wortise In-App Ad SDK & Mediated Networks ProGuard Rules
 -keep class com.wortise.ads.** { *; }
 -dontwarn com.wortise.ads.**
+-keep class com.google.android.gms.ads.** { *; }
+-dontwarn com.google.android.gms.ads.**
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.android.gms.**
 -dontwarn com.unity3d.**
+-dontwarn com.chartboost.**
+-dontwarn com.bytedance.**

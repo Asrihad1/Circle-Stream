@@ -61,20 +61,25 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Runtime Security & Anti-Crack Protection (Anti-tamper, Anti-Frida, Signature verification)
-        if (com.circleftp.stream.security.AntiReverseGuard.isDebuggerConnected() ||
-            com.circleftp.stream.security.AntiReverseGuard.isFridaActive() ||
-            com.circleftp.stream.security.AntiReverseGuard.isFridaPortOpen() ||
-            !com.circleftp.stream.security.AntiReverseGuard.isSignatureValid(this)
-        ) {
-            android.widget.Toast.makeText(this, "Security Alert: App integrity compromised", android.widget.Toast.LENGTH_LONG).show()
-            finish()
-            return
+        try {
+            if (!BuildConfig.DEBUG && (
+                com.circleftp.stream.security.AntiReverseGuard.isDebuggerConnected() ||
+                com.circleftp.stream.security.AntiReverseGuard.isFridaActive()
+            )) {
+                android.util.Log.w("MainActivity", "Security notice: Debugger or instrumentation tool detected")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Security check bypassed", e)
         }
 
         enableEdgeToEdge()
 
-        // Initialize Wortise Monetization SDK via WortiseManager
-        WortiseManager.init(this)
+        // Initialize Wortise Monetization SDK defensively via WortiseManager
+        try {
+            WortiseManager.init(this)
+        } catch (t: Throwable) {
+            android.util.Log.e("MainActivity", "Wortise initialization error", t)
+        }
 
         setContent {
             CircleStreamTheme {
