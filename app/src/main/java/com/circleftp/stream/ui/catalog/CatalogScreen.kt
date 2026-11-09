@@ -76,16 +76,21 @@ fun CatalogScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isSearching by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
+    var reloadTrigger by remember { mutableIntStateOf(0) }
 
     // Initial Catalog Data Loading
-    LaunchedEffect(provider.providerId) {
+    LaunchedEffect(provider.providerId, reloadTrigger) {
         isLoading = true
         errorMsg = null
         try {
             if (isCircleFtp && circleApiClient != null) {
                 circleHomeData = circleApiClient.getHomePage()
             } else {
-                genericTrendingItems = provider.getTrending()
+                val items = provider.getTrending()
+                genericTrendingItems = items
+                if (items.isEmpty()) {
+                    errorMsg = "Unable to connect to media server. Please check your internet or tap Retry."
+                }
             }
             isLoading = false
         } catch (e: Exception) {
@@ -291,18 +296,23 @@ fun CatalogScreen(
                 // Error State
                 errorMsg != null -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
-                            Text(text = "Error: $errorMsg", color = TextSecondary, fontSize = 14.sp)
-                            Spacer(modifier = Modifier.height(12.dp))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Text(
+                                text = errorMsg ?: "Unable to load catalog",
+                                color = TextSecondary,
+                                fontSize = 14.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
                             Button(
-                                onClick = {
-                                    isLoading = true
-                                    errorMsg = null
-                                    // Trigger reload
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = CircleRed)
+                                onClick = { reloadTrigger++ },
+                                colors = ButtonDefaults.buttonColors(containerColor = CircleRed),
+                                shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("Retry")
+                                Text("Retry", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -400,11 +410,25 @@ fun CatalogScreen(
 
                 else -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "No content found in this catalog",
-                            color = TextSecondary,
-                            fontSize = 14.sp
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Text(
+                                text = "No content loaded from ${provider.providerName}",
+                                color = TextSecondary,
+                                fontSize = 14.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { reloadTrigger++ },
+                                colors = ButtonDefaults.buttonColors(containerColor = CircleRed),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Tap to Refresh", fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }

@@ -42,8 +42,13 @@ class TmdbApiClient(
         }
     }
 
-    private fun getApiKey(): String {
-        return configManager?.getDomain("tmdb_api_key", DEFAULT_TMDB_API_KEY) ?: DEFAULT_TMDB_API_KEY
+    private fun getApiKeys(): List<String> {
+        val customKey = configManager?.getDomain("tmdb_api_key", "")
+        return if (!customKey.isNullOrBlank()) {
+            listOf(customKey, PRIMARY_TMDB_API_KEY, SECONDARY_TMDB_API_KEY)
+        } else {
+            listOf(PRIMARY_TMDB_API_KEY, SECONDARY_TMDB_API_KEY)
+        }
     }
 
     private fun getBaseUrl(): String {
@@ -56,16 +61,39 @@ class TmdbApiClient(
         return "https://image.tmdb.org/t/p/$size/$clean"
     }
 
+    private suspend fun fetchJsonWithKeyFallback(urlBuilder: (String) -> String): String? {
+        val keys = getApiKeys()
+        for (key in keys) {
+            try {
+                val url = urlBuilder(key)
+                val response = httpClient.get(url)
+                val status = response.status.value
+                if (status in 200..299) {
+                    val body = response.bodyAsText()
+                    if (body.contains("\"results\"") || body.contains("\"id\"")) {
+                        return body
+                    }
+                }
+                Log.w(TAG, "Key $key returned HTTP $status for $url")
+            } catch (e: Exception) {
+                Log.w(TAG, "Request failed with key: ${e.message}")
+            }
+        }
+        return null
+    }
+
     /**
      * Fetches globally trending movies and series.
      */
     suspend fun getTrending(): List<TmdbItemSummary> = withContext(Dispatchers.IO) {
         val list = mutableListOf<TmdbItemSummary>()
         try {
-            val key = getApiKey()
-            val url = "${getBaseUrl()}/trending/all/day?api_key=$key&language=en-US"
-            val response = httpClient.get(url).bodyAsText()
-            list.addAll(parseItemSummaries(response))
+            val body = fetchJsonWithKeyFallback { key ->
+                "${getBaseUrl()}/trending/all/day?api_key=$key&language=en-US"
+            }
+            if (body != null) {
+                list.addAll(parseItemSummaries(body))
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch trending: ${e.message}")
         }
@@ -78,11 +106,12 @@ class TmdbApiClient(
     suspend fun getHindiTrending(): List<TmdbItemSummary> = withContext(Dispatchers.IO) {
         val list = mutableListOf<TmdbItemSummary>()
         try {
-            val key = getApiKey()
-            // Discover Indian cinema / Hindi audio releases sorted by current popularity
-            val url = "${getBaseUrl()}/discover/movie?api_key=$key&with_original_language=hi&sort_by=popularity.desc&page=1"
-            val response = httpClient.get(url).bodyAsText()
-            list.addAll(parseItemSummaries(response, forcedType = "movie", tagBadge = "Hindi / Bollywood"))
+            val body = fetchJsonWithKeyFallback { key ->
+                "${getBaseUrl()}/discover/movie?api_key=$key&with_original_language=hi&sort_by=popularity.desc&page=1"
+            }
+            if (body != null) {
+                list.addAll(parseItemSummaries(body, forcedType = "movie", tagBadge = "Hindi / Bollywood"))
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch Hindi trending: ${e.message}")
         }
@@ -96,11 +125,13 @@ class TmdbApiClient(
         if (query.isBlank()) return@withContext emptyList()
         val list = mutableListOf<TmdbItemSummary>()
         try {
-            val key = getApiKey()
             val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
-            val url = "${getBaseUrl()}/search/multi?api_key=$key&query=$encoded&include_adult=false&language=en-US"
-            val response = httpClient.get(url).bodyAsText()
-            list.addAll(parseItemSummaries(response))
+            val body = fetchJsonWithKeyFallback { key ->
+                "${getBaseUrl()}/search/multi?api_key=$key&query=$encoded&include_adult=false&language=en-US"
+            }
+            if (body != null) {
+                list.addAll(parseItemSummaries(body))
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Search failed for '$query': ${e.message}")
         }
@@ -112,10 +143,12 @@ class TmdbApiClient(
      */
     suspend fun getMovieDetails(id: Int): TmdbDetailResult? = withContext(Dispatchers.IO) {
         try {
-            val key = getApiKey()
-            val url = "${getBaseUrl()}/movie/$id?api_key=$key&language=en-US&append_to_response=external_ids,credits"
-            val response = httpClient.get(url).bodyAsText()
-            parseMovieDetail(response)
+            val body = fetchJsonWithKeyFallback { key ->
+                "${getBaseUrl()}/movie/$id?api_key=$key&language=en-US&append_to_response=external_ids,credits"
+            }
+            if (body != null) {
+                parseMovieDetail(body)
+            } else null
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch movie details for id=$id: ${e.message}")
             null
@@ -127,10 +160,13 @@ class TmdbApiClient(
      */
     suspend fun getTvDetails(id: Int): TmdbDetailResult? = withContext(Dispatchers.IO) {
         try {
-            val key = getApiKey()
-            val url = "${getBaseUrl()}/tv/$id?api_key=$key&language=en-US&append_to_response=external_ids,credits"
-            val response = httpClient.get(url).bodyAsText()
-            parseTvDetail(response, id, key)
+            val primaryKey = getApiKeys().first()
+            val body = fetchJsonWithKeyFallback { key ->
+                "${getBaseUrl()}/tv/$id?api_key=$key&language=en-US&append_to_response=external_ids,credits"
+            }
+            if (body != null) {
+                parseTvDetail(body, id, primaryKey)
+            } else null
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch TV details for id=$id: ${e.message}")
             null
@@ -316,8 +352,9 @@ class TmdbApiClient(
 
     companion object {
         private const val TAG = "TmdbApiClient"
-        // Universal public read-only TMDB API key
-        private const val DEFAULT_TMDB_API_KEY = "3c60461bf00bd215ab7db410c5980a3c"
+        // High-availability TMDB API key pool
+        const val PRIMARY_TMDB_API_KEY = "4e44d9029b1270a757cddc766a1bcb63"
+        const val SECONDARY_TMDB_API_KEY = "15d2ea6d0dc1d476efbca3eba2b9bbfb"
     }
 }
 
