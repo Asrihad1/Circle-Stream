@@ -327,7 +327,9 @@ fun DetailScreen(
                                         try {
                                             val seasonNum = if (detail.isSeries && detail.seasons.isNotEmpty()) 1 else 0
                                             val episodeNum = if (detail.isSeries && detail.seasons.isNotEmpty()) 1 else 0
-                                            val resolved = provider.getStreams(effectiveMediaId, season = seasonNum, episode = episodeNum)
+                                            val resolved = com.circleftp.stream.player.StreamMirrorRanker.rank(
+                                                provider.getStreams(effectiveMediaId, season = seasonNum, episode = episodeNum)
+                                            )
 
                                             val playUrl = resolved.primaryStreamUrl ?: detail.directStreamUrl
                                             if (playUrl.isNullOrBlank()) {
@@ -455,10 +457,12 @@ fun DetailScreen(
                                                         )
                                                     )
                                                 } else {
-                                                    provider.getStreams(
-                                                        mediaId = targetMediaId,
-                                                        season = currentSeason.seasonNumber,
-                                                        episode = ep.episodeNumber
+                                                    com.circleftp.stream.player.StreamMirrorRanker.rank(
+                                                        provider.getStreams(
+                                                            mediaId = targetMediaId,
+                                                            season = currentSeason.seasonNumber,
+                                                            episode = ep.episodeNumber
+                                                        )
                                                     )
                                                 }
 

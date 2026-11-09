@@ -54,8 +54,7 @@ import com.circleftp.stream.updater.AppUpdater
 import com.circleftp.stream.updater.AutoUpdateDialogHost
 import com.circleftp.stream.updater.CircleUpdateManager
 import com.circleftp.stream.utils.AdManager
-import com.startapp.sdk.adsbase.StartAppAd
-import com.startapp.sdk.adsbase.StartAppSDK
+import com.circleftp.stream.utils.StartIoManager
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -75,16 +74,21 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        // Initialize Start.io Monetization SDK
-        StartAppSDK.init(this, "210959821", false)
-        StartAppSDK.setTestAdsEnabled(BuildConfig.DEBUG)
-        StartAppAd.disableSplash()
+        // Initialize Start.io Monetization SDK via StartIoManager
+        StartIoManager.init(this)
 
         setContent {
             CircleStreamTheme {
                 CircleStreamApp()
             }
         }
+    }
+
+    /**
+     * Reusable helper function to load and display an interstitial ad with debug logging callbacks.
+     */
+    fun showInterstitialAd(onComplete: () -> Unit = {}) {
+        StartIoManager.showInterstitial(this, onComplete)
     }
 }
 
@@ -104,6 +108,12 @@ fun CircleStreamApp() {
     LaunchedEffect(Unit) {
         // Asynchronously fetch remote provider domains
         configManager.fetchRemoteConfig()
+
+        // Dynamic Remote Provider Manifest: enable/disable/reorder providers + kill switch
+        if (com.circleftp.stream.data.manifest.ProviderManifestManager.refresh(context)) {
+            providerRegistry.applyManifest()
+        }
+
         updateManager.checkForUpdates(silentIfUpToDate = true)
 
         // Firebase Remote Config Auto-Update check
@@ -199,7 +209,7 @@ fun CircleStreamApp() {
                     navController.navigate("detail/circleftp/$postId")
                 },
                 onResumePlayback = { historyItem ->
-                    AdManager.showInterstitialIfEligible(context) {
+                    StartIoManager.showInterstitial(context) {
                         val resolvedPostId = historyItem.parentSeriesId?.toLongOrNull()
                             ?: historyItem.mediaId.removePrefix("series_").removePrefix("movie_").toLongOrNull()
                             ?: 0L
@@ -259,7 +269,9 @@ fun CircleStreamApp() {
                                 providerId = "iptvidn",
                                 headers = resolved.headers
                             )
-                            navController.navigate("player")
+                            StartIoManager.showInterstitial(context) {
+                                navController.navigate("player")
+                            }
                         } else {
                             Toast.makeText(context, "Channel stream currently unavailable at source", Toast.LENGTH_SHORT).show()
                         }
@@ -296,7 +308,9 @@ fun CircleStreamApp() {
                 mediaId = mediaId,
                 onBack = { navController.popBackStack() },
                 onPlay = { _, _ ->
-                    navController.navigate("player")
+                    StartIoManager.showInterstitial(context) {
+                        navController.navigate("player")
+                    }
                 }
             )
         }
@@ -313,7 +327,9 @@ fun CircleStreamApp() {
                 onBack = { navController.popBackStack() },
                 onPlay = { _, _ ->
                     ActivePlayerSession.postId = postId
-                    navController.navigate("player")
+                    StartIoManager.showInterstitial(context) {
+                        navController.navigate("player")
+                    }
                 }
             )
         }
@@ -376,7 +392,9 @@ fun CircleStreamApp() {
                             -1
                         }
                     )
-                    navController.navigate("player")
+                    StartIoManager.showInterstitial(context) {
+                        navController.navigate("player")
+                    }
                 },
                 onPlayWatchLater = { item ->
                     val resolvedPostId = item.mediaId.removePrefix("series_").removePrefix("movie_").toLongOrNull() ?: 0L
@@ -388,7 +406,9 @@ fun CircleStreamApp() {
                         posterUrl = item.posterUrl,
                         isSeries = item.isSeries
                     )
-                    navController.navigate("player")
+                    StartIoManager.showInterstitial(context) {
+                        navController.navigate("player")
+                    }
                 },
                 onSelectPostId = { postId ->
                     navController.navigate("detail/$postId")

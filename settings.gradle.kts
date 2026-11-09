@@ -18,6 +18,12 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = java.net.URI("https://jitpack.io") }
+        maven {
+            url = java.net.URI("https://ads.start.io/maven")
+            content {
+                includeGroup("com.startapp.legacy")
+            }
+        }
     }
 }
 

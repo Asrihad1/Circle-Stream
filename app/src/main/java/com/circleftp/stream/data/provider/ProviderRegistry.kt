@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import com.circleftp.stream.data.config.ConfigManager
+import com.circleftp.stream.data.manifest.ProviderManifestManager
 import com.circleftp.stream.data.provider.circle.CircleFtpProvider
 import com.circleftp.stream.data.provider.iptv.IptvIdnProvider
 import com.circleftp.stream.data.provider.model.MediaItemModel
@@ -35,7 +36,18 @@ class ProviderRegistry private constructor(
     private val _activeProviderFlow = MutableStateFlow<MediaSourceProvider>(circleFtpProvider)
     val activeProviderFlow: StateFlow<MediaSourceProvider> = _activeProviderFlow.asStateFlow()
 
+    /** Built-in providers in their default display order (index = default priority). */
+    private val builtInProviders: List<MediaSourceProvider> = listOf(circleFtpProvider, iptvIdnProvider)
+
+    private val _availableProvidersFlow = MutableStateFlow(builtInProviders)
+
+    /** Providers allowed by the remote manifest, ordered by remote priority. */
+    val availableProvidersFlow: StateFlow<List<MediaSourceProvider>> = _availableProvidersFlow.asStateFlow()
+
     init {
+        // Load last cached remote manifest before computing visible providers
+        ProviderManifestManager.init(appContext)
+
         // Register Core Providers
         registerProvider(circleFtpProvider)
         registerProvider(iptvIdnProvider)
@@ -55,13 +67,47 @@ class ProviderRegistry private constructor(
         }
 
         Log.i(TAG, "Initialized ProviderRegistry with active provider: ${initialProvider.providerName}")
+
+        applyManifest()
     }
 
     /**
-     * Distinct list of all available providers for UI dropdown / switcher.
+     * Distinct list of all available providers for UI dropdown / switcher,
+     * filtered and ordered by the remote provider manifest.
      */
     val availableProviders: List<MediaSourceProvider>
-        get() = listOf(circleFtpProvider, iptvIdnProvider)
+        get() = _availableProvidersFlow.value
+
+    /**
+     * Re-evaluates provider visibility/order from [ProviderManifestManager].
+     * Call after the remote manifest has been refreshed.
+     *
+     * If the kill switch disables the active provider, the first remaining provider
+     * becomes active. If every provider is disabled, Circle FTP is kept as a safe fallback
+     * so the UI is never left empty.
+     */
+    fun applyManifest() {
+        val allowed = builtInProviders
+            .withIndex()
+            .filter { ProviderManifestManager.isProviderEnabled(it.value.providerId) }
+            .sortedBy { ProviderManifestManager.priorityOf(it.value.providerId, fallback = it.index) }
+            .map { it.value }
+            .ifEmpty {
+                Log.w(TAG, "Manifest disabled every provider; keeping ${circleFtpProvider.providerName} as fallback")
+                listOf(circleFtpProvider)
+            }
+
+        _availableProvidersFlow.value = allowed
+
+        val active = _activeProviderFlow.value
+        if (allowed.none { it.providerId == active.providerId }) {
+            val replacement = allowed.first()
+            _activeProviderFlow.value = replacement
+            prefs.edit().putString(KEY_ACTIVE_PROVIDER, replacement.providerId).apply()
+            Log.w(TAG, "Active provider ${active.providerId} disabled by manifest -> switched to ${replacement.providerId}")
+        }
+        Log.i(TAG, "Manifest applied. Visible providers: ${allowed.map { it.providerId }}")
+    }
 
     /**
      * Registers a new provider into the aggregation pool.

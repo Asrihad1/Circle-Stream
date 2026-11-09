@@ -79,7 +79,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val providerRegistry = remember { ProviderRegistry.getInstance(context) }
-    val providers = remember { providerRegistry.availableProviders }
+    val providers by providerRegistry.availableProvidersFlow.collectAsState()
 
     val activeDownloads by CircleDownloadManager.pollActiveDownloads(context)
         .collectAsState(initial = emptyList())

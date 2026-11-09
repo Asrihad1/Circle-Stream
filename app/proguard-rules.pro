@@ -56,3 +56,7 @@
     public static int d(...);
     public static int i(...);
 }
+
+# 8. Start.io In-App Ad SDK ProGuard Rules
+-keep class com.startapp.** { *; }
+-dontwarn com.startapp.**

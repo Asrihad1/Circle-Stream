@@ -25,8 +25,11 @@ android {
         applicationId = "com.circle.stream"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.3.0"
+        versionCode = 2
+        versionName = "1.3.1"
+
+        val startIoAppId = localProperties.getProperty("STARTIO_APP_ID") ?: "210959821"
+        buildConfigField("String", "STARTIO_APP_ID", "\"$startIoAppId\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
