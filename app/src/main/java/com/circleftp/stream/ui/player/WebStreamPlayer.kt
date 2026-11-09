@@ -76,6 +76,16 @@ fun WebStreamPlayer(
     var customViewCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
     var showControls by remember { mutableStateOf(true) }
 
+    fun loadUrlWithValidationHeaders(targetUrl: String, customHeaders: Map<String, String> = emptyMap()) {
+        val extraHeaders = mutableMapOf<String, String>()
+        val host = android.net.Uri.parse(targetUrl).host.orEmpty()
+        val referer = customHeaders["Referer"]
+            ?: if (host.isNotBlank()) "https://$host/" else "https://netmirror.app/"
+        extraHeaders["Referer"] = referer
+        customHeaders.forEach { (k, v) -> extraHeaders[k] = v }
+        webViewRef?.loadUrl(targetUrl, extraHeaders)
+    }
+
     fun selectServer(index: Int) {
         if (index in availableStreams.indices) {
             val target = availableStreams[index]
@@ -84,7 +94,7 @@ fun WebStreamPlayer(
             hasError = false
             errorMessage = null
             isLoading = true
-            webViewRef?.loadUrl(target.url)
+            loadUrlWithValidationHeaders(target.url, target.headers)
         }
     }
 
@@ -128,7 +138,6 @@ fun WebStreamPlayer(
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
-                        databaseEnabled = true
                         mediaPlaybackRequiresUserGesture = false
                         loadWithOverviewMode = true
                         useWideViewPort = true
@@ -137,9 +146,11 @@ fun WebStreamPlayer(
                         // Enable multiple windows routing so WebChromeClient.onCreateWindow catches and destroys popups!
                         setSupportMultipleWindows(true)
                         javaScriptCanOpenWindowsAutomatically = false
-                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        // Desktop User-Agent prevents ad networks from triggering mobile carrier-billing / SMS gates
-                        userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        }
+                        // Spoof Desktop Browser to bypass CDN mobile blocks & carrier-billing
+                        userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                     }
 
                     webChromeClient = object : WebChromeClient() {
@@ -306,7 +317,14 @@ fun WebStreamPlayer(
                         }
                     }
 
-                    loadUrl(currentStreamUrl)
+                    val initialHeaders = availableStreams.getOrNull(activeServerIndex)?.headers ?: emptyMap()
+                    val extraHeaders = mutableMapOf<String, String>()
+                    val host = android.net.Uri.parse(currentStreamUrl).host.orEmpty()
+                    val referer = initialHeaders["Referer"]
+                        ?: if (host.isNotBlank()) "https://$host/" else "https://netmirror.app/"
+                    extraHeaders["Referer"] = referer
+                    initialHeaders.forEach { (k, v) -> extraHeaders[k] = v }
+                    loadUrl(currentStreamUrl, extraHeaders)
                 }
             },
             update = { view ->
