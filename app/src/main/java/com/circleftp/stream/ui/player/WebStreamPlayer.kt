@@ -103,7 +103,8 @@ fun WebStreamPlayer(
                         allowContentAccess = false
                         setSupportMultipleWindows(false)
                         javaScriptCanOpenWindowsAutomatically = false
-                        userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+                        // Desktop User-Agent prevents ad networks from triggering mobile carrier-billing / SMS gates
+                        userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
                     }
 
                     webChromeClient = object : WebChromeClient() {
@@ -118,35 +119,51 @@ fun WebStreamPlayer(
                         }
 
                         override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                            if (newProgress >= 85) {
+                            if (newProgress >= 70) {
                                 isLoading = false
                             }
+                        }
+
+                        // Auto-dismiss intrusive JS alerts, confirms, and prompts
+                        override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
+                            result?.cancel()
+                            return true
+                        }
+
+                        override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
+                            result?.confirm()
+                            return true
+                        }
+
+                        override fun onJsPrompt(view: WebView?, url: String?, message: String?, defaultValue: String?, result: JsPromptResult?): Boolean {
+                            result?.cancel()
+                            return true
                         }
                     }
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             isLoading = true
+                            injectAntiSpamScrubber(view)
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             isLoading = false
-                            // Inject CSS to suppress overlay ad wrappers and auto-fit HTML5 video
-                            view?.evaluateJavascript(
-                                """
-                                (function() {
-                                    var style = document.createElement('style');
-                                    style.innerHTML = 'div[class*="ad"], iframe[src*="doubleclick"], div[id*="pop"], .banner-ad { display: none !important; } video { width: 100% !important; height: 100% !important; }';
-                                    document.head.appendChild(style);
-                                })();
-                                """.trimIndent(),
-                                null
-                            )
+                            injectAntiSpamScrubber(view)
                         }
 
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                            val destUrl = request?.url?.toString()?.lowercase().orEmpty()
-                            // Block known malicious ad redirect domains
+                            val uri = request?.url ?: return false
+                            val scheme = uri.scheme?.lowercase().orEmpty()
+
+                            // Block non-HTTP protocols (SMS, TEL, WAP, INTENT, MARKET) to prevent carrier billing
+                            if (scheme != "http" && scheme != "https") {
+                                return true
+                            }
+
+                            val destUrl = uri.toString().lowercase()
+
+                            // Block known malicious ad, carrier-billing, and verification redirect URLs
                             if (destUrl.contains("bet") ||
                                 destUrl.contains("casino") ||
                                 destUrl.contains("track") ||
@@ -154,11 +171,25 @@ fun WebStreamPlayer(
                                 destUrl.contains("adservice") ||
                                 destUrl.contains("directlink") ||
                                 destUrl.contains("apk") ||
-                                destUrl.contains("download")
+                                destUrl.contains("download") ||
+                                destUrl.contains("verify") ||
+                                destUrl.contains("otp") ||
+                                destUrl.contains("sms") ||
+                                destUrl.contains("carrier") ||
+                                destUrl.contains("billing") ||
+                                destUrl.contains("subscribe") ||
+                                destUrl.contains("vas") ||
+                                destUrl.contains("age") ||
+                                destUrl.contains("adult") ||
+                                destUrl.contains("poringasitia") ||
+                                destUrl.contains("monetag") ||
+                                destUrl.contains("alwingulla") ||
+                                destUrl.contains("clickadu")
                             ) {
                                 return true // Block redirect
                             }
-                            return false // Allow player domain scripts & assets
+
+                            return false // Allow legitimate media player asset loads
                         }
                     }
 
@@ -292,3 +323,62 @@ fun WebStreamPlayer(
         }
     }
 }
+
+/**
+ * Deep anti-spam & anti-carrier-billing DOM scrubber.
+ * Permanently removes fake "Age Verification", SMS verification prompts, WAP billing gates,
+ * and malicious popup overlays from third-party embed streaming hosts.
+ */
+private fun injectAntiSpamScrubber(view: WebView?) {
+    val jsCode = """
+        (function() {
+            // 1. Inject aggressive CSS to auto-hide and unblock overlays
+            var styleId = 'circle_anti_spam_shield';
+            if (!document.getElementById(styleId)) {
+                var style = document.createElement('style');
+                style.id = styleId;
+                style.innerHTML = `
+                    div[class*="ad"], iframe[src*="doubleclick"], div[id*="pop"], .banner-ad,
+                    div[class*="verify"], div[id*="verify"], div[class*="age-gate"], div[id*="age"],
+                    .modal-backdrop, .overlay-popup, [data-ad], [id*="ad_"] {
+                        display: none !important;
+                        opacity: 0 !important;
+                        pointer-events: none !important;
+                        visibility: hidden !important;
+                    }
+                    video {
+                        width: 100% !important;
+                        height: 100% !important;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+            }
+
+            // 2. Active DOM node scrubber: continuously search and delete fake verification modals
+            function scrubModals() {
+                var targets = document.querySelectorAll('div, section, modal, dialog, .overlay, .popup, .modal');
+                targets.forEach(function(el) {
+                    var txt = (el.innerText || '').toLowerCase();
+                    if (txt.includes('verification code') ||
+                        txt.includes('age verification') ||
+                        txt.includes('intended for people over 18') ||
+                        txt.includes('confirm your age') ||
+                        txt.includes('verification code was sent') ||
+                        txt.includes('+880') ||
+                        txt.includes('resend') ||
+                        txt.includes('yes, i am 18')
+                    ) {
+                        el.style.display = 'none';
+                        el.remove();
+                    }
+                });
+            }
+
+            scrubModals();
+            setInterval(scrubModals, 350);
+        })();
+    """.trimIndent()
+
+    view?.evaluateJavascript(jsCode, null)
+}
+

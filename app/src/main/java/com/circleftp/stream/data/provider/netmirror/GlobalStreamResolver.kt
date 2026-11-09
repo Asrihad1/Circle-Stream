@@ -55,11 +55,11 @@ object GlobalStreamResolver {
 
         val idParam = imdbId?.takeIf { it.isNotBlank() } ?: tmdbId
 
-        // Server 1: MultiEmbed (Primary Multi-Language with Hindi/South Indian Audio)
-        val multiEmbedUrl = if (isSeries) {
-            "https://multiembed.mov/?video_id=$idParam&tmdb=1&s=$effectiveSeason&e=$effectiveEpisode"
+        // Server 1: VidLink Pro (Clean, 1080p Ultra HD, Zero Ads, No Carrier Billing, Auto-Subtitles)
+        val vidLinkUrl = if (isSeries) {
+            "https://vidlink.pro/tv/$tmdbId/$effectiveSeason/$effectiveEpisode?primaryColor=E50914&autoplay=true"
         } else {
-            "https://multiembed.mov/?video_id=$idParam&tmdb=1"
+            "https://vidlink.pro/movie/$tmdbId?primaryColor=E50914&autoplay=true"
         }
 
         // Server 2: VidSrc PM (Fast 1080p Cloud Node)
@@ -69,30 +69,30 @@ object GlobalStreamResolver {
             "https://vidsrc.pm/embed/movie/$tmdbId"
         }
 
-        // Server 3: VidSrc.to Fast Edge
+        // Server 3: AutoEmbed Edge (Fast Multi-CDN)
+        val autoEmbedUrl = if (isSeries) {
+            "https://autoembed.co/tv/tmdb/$tmdbId-$effectiveSeason-$effectiveEpisode"
+        } else {
+            "https://autoembed.co/movie/tmdb/$tmdbId"
+        }
+
+        // Server 4: VidSrc.to Edge
         val vidsrcToUrl = if (isSeries) {
             "https://vidsrc.to/embed/tv/$tmdbId/$effectiveSeason/$effectiveEpisode"
         } else {
             "https://vidsrc.to/embed/movie/$tmdbId"
         }
 
-        // Server 4: VidSrc.me Universal Node
-        val vidsrcMeUrl = if (isSeries) {
-            "https://vidsrc.me/embed/tv?tmdb=$tmdbId&season=$effectiveSeason&episode=$effectiveEpisode"
-        } else {
-            "https://vidsrc.me/embed/movie?tmdb=$tmdbId"
-        }
-
         streams.add(
             StreamSource(
-                url = multiEmbedUrl,
-                quality = "1080p Multi-Audio / Hindi Dub",
+                url = vidLinkUrl,
+                quality = "1080p Ultra HD (Clean & Ad-Free)",
                 format = StreamFormat.HLS,
                 headers = mapOf(
-                    "Referer" to "https://multiembed.mov",
-                    "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36"
+                    "Referer" to "https://vidlink.pro",
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 ),
-                serverName = "Server 1 - MultiEmbed (Hindi / Multi-Audio)"
+                serverName = "Server 1 - VidLink Pro (Ultra HD / No Ads)"
             )
         )
 
@@ -103,7 +103,7 @@ object GlobalStreamResolver {
                 format = StreamFormat.HLS,
                 headers = mapOf(
                     "Referer" to "https://vidsrc.pm",
-                    "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36"
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 ),
                 serverName = "Server 2 - VidSrc HD Node"
             )
@@ -111,27 +111,27 @@ object GlobalStreamResolver {
 
         streams.add(
             StreamSource(
-                url = vidsrcToUrl,
-                quality = "1080p Fast Edge",
+                url = autoEmbedUrl,
+                quality = "1080p Fast CDN",
                 format = StreamFormat.HLS,
                 headers = mapOf(
-                    "Referer" to "https://vidsrc.to",
-                    "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36"
+                    "Referer" to "https://autoembed.co",
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 ),
-                serverName = "Server 3 - VidSrc.to Edge"
+                serverName = "Server 3 - AutoEmbed Edge"
             )
         )
 
         streams.add(
             StreamSource(
-                url = vidsrcMeUrl,
-                quality = "720p / 1080p Universal",
+                url = vidsrcToUrl,
+                quality = "720p / 1080p Fast",
                 format = StreamFormat.HLS,
                 headers = mapOf(
-                    "Referer" to "https://vidsrc.me",
-                    "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36"
+                    "Referer" to "https://vidsrc.to",
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 ),
-                serverName = "Server 4 - VidSrc Universal"
+                serverName = "Server 4 - VidSrc.to Mirror"
             )
         )
 
