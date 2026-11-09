@@ -1,29 +1,23 @@
 package com.circleftp.stream.data.provider.netmirror
 
+import android.util.Log
 import com.circleftp.stream.data.config.ConfigManager
 import com.circleftp.stream.data.provider.MediaSourceProvider
 import com.circleftp.stream.data.provider.model.MediaDetailModel
 import com.circleftp.stream.data.provider.model.MediaItemModel
 import com.circleftp.stream.data.provider.model.MediaType
+import com.circleftp.stream.data.provider.model.ProviderEpisode
+import com.circleftp.stream.data.provider.model.ProviderSeason
 import com.circleftp.stream.data.provider.model.ResolvedStreamModel
-import com.circleftp.stream.data.provider.model.StreamFormat
-import com.circleftp.stream.data.provider.model.StreamSource
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.request.get
-import io.ktor.client.request.header
-import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import java.util.concurrent.TimeUnit
 
 /**
  * NetMirror Global Cloud Media Streaming Provider.
- * Allows global internet users on any Wi-Fi or mobile network to search and stream movies/shows.
+ * Powered by TMDB (The Movie Database) for complete Hollywood, Bollywood, and Hindi-dubbed
+ * movies & TV shows metadata with high-resolution posters, seasons/episodes, and live multi-search.
+ *
+ * Fully accessible on any Wi-Fi or mobile data network worldwide without BDIX restrictions.
  */
 class NetMirrorProvider(
     private val configManager: ConfigManager? = null
@@ -33,36 +27,21 @@ class NetMirrorProvider(
     override val providerName: String = "NetMirror (Global)"
     override val isBdixOnly: Boolean = false
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        coerceInputValues = true
-    }
-
-    private val httpClient = HttpClient(OkHttp) {
-        engine {
-            config {
-                connectTimeout(15, TimeUnit.SECONDS)
-                readTimeout(20, TimeUnit.SECONDS)
-                followRedirects(true)
-                followSslRedirects(true)
-            }
-        }
-    }
-
-    private fun getBaseUrl(): String {
-        return configManager?.getDomain("netmirror", DEFAULT_NETMIRROR_URL) ?: DEFAULT_NETMIRROR_URL
-    }
+    private val tmdbClient = TmdbApiClient(configManager)
 
     override suspend fun getTrending(): List<MediaItemModel> = withContext(Dispatchers.IO) {
         try {
-            val url = "${getBaseUrl()}/api/trending"
-            val response = httpClient.get(url) {
-                header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8)")
-            }.bodyAsText()
+            // Combine general trending with popular Bollywood/Hindi cinema so users see both
+            val globalTrending = tmdbClient.getTrending()
+            val hindiTrending = tmdbClient.getHindiTrending()
 
-            parseMediaList(response)
-        } catch (_: Exception) {
+            // Merge and deduplicate by id
+            val combined = (hindiTrending.take(10) + globalTrending)
+                .distinctBy { it.id }
+
+            combined.map { it.toMediaItemModel() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching trending: ${e.message}", e)
             emptyList()
         }
     }
@@ -70,147 +49,150 @@ class NetMirrorProvider(
     override suspend fun search(query: String): List<MediaItemModel> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
         try {
-            val url = "${getBaseUrl()}/api/search?q=${java.net.URLEncoder.encode(query, "UTF-8")}"
-            val response = httpClient.get(url) {
-                header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8)")
-            }.bodyAsText()
-
-            parseMediaList(response)
-        } catch (_: Exception) {
+            val results = tmdbClient.search(query)
+            results.map { it.toMediaItemModel() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error searching '$query': ${e.message}", e)
             emptyList()
         }
     }
 
     override suspend fun getDetails(mediaId: String, mediaType: String): MediaDetailModel = withContext(Dispatchers.IO) {
+        val parsed = parseIdAndType(mediaId, mediaType)
+        val numericId = parsed.first
+        val isSeries = parsed.second
+
         try {
-            val url = "${getBaseUrl()}/api/details?id=${java.net.URLEncoder.encode(mediaId, "UTF-8")}"
-            val response = httpClient.get(url) {
-                header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8)")
-            }.bodyAsText()
-
-            val root = json.parseToJsonElement(response).jsonObject
-            val title = root["title"]?.jsonPrimitive?.content ?: mediaId
-            val desc = root["description"]?.jsonPrimitive?.content ?: "Stream available via NetMirror Global Edge."
-            val poster = root["poster"]?.jsonPrimitive?.content
-            val backdrop = root["backdrop"]?.jsonPrimitive?.content
-            val quality = root["quality"]?.jsonPrimitive?.content ?: "1080p HD"
-
-            MediaDetailModel(
-                id = mediaId,
-                title = title,
-                description = desc,
-                posterUrl = poster,
-                backdropUrl = backdrop,
-                quality = quality,
-                mediaType = MediaType.MOVIE,
-                providerId = providerId
-            )
-        } catch (_: Exception) {
-            MediaDetailModel(
-                id = mediaId,
-                title = mediaId,
-                description = "NetMirror Global Mirror Stream",
-                mediaType = MediaType.MOVIE,
-                providerId = providerId
-            )
-        }
-    }
-
-    override suspend fun getStreams(mediaId: String, season: Int, episode: Int): ResolvedStreamModel = withContext(Dispatchers.IO) {
-        try {
-            val url = "${getBaseUrl()}/api/resolve?id=${java.net.URLEncoder.encode(mediaId, "UTF-8")}&s=$season&e=$episode"
-            val response = httpClient.get(url) {
-                header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8)")
-            }.bodyAsText()
-
-            val root = json.parseToJsonElement(response).jsonObject
-            val streamList = mutableListOf<StreamSource>()
-            
-            root["streams"]?.jsonArray?.forEach { element ->
-                val obj = element.jsonObject
-                val streamUrl = obj["url"]?.jsonPrimitive?.content
-                if (!streamUrl.isNullOrBlank()) {
-                    val quality = obj["quality"]?.jsonPrimitive?.content ?: "1080p"
-                    val format = if (streamUrl.contains(".m3u8", ignoreCase = true)) StreamFormat.HLS else StreamFormat.MP4
-                    val headersMap = mutableMapOf<String, String>()
-                    obj["headers"]?.jsonObject?.forEach { (k, v) ->
-                        v.jsonPrimitive.content.let { headersMap[k] = it }
-                    }
-                    if (!headersMap.containsKey("Referer")) {
-                        headersMap["Referer"] = getBaseUrl()
-                    }
-                    streamList.add(
-                        StreamSource(
-                            url = streamUrl,
-                            quality = quality,
-                            format = format,
-                            headers = headersMap,
-                            serverName = "NetMirror Cloud CDN"
+            if (isSeries) {
+                val tvDetail = tmdbClient.getTvDetails(numericId)
+                if (tvDetail != null) {
+                    val mappedSeasons = tvDetail.seasons.map { s ->
+                        ProviderSeason(
+                            seasonNumber = s.seasonNumber,
+                            seasonName = s.seasonName,
+                            episodes = s.episodes.map { ep ->
+                                ProviderEpisode(
+                                    episodeNumber = ep.episodeNumber,
+                                    seasonNumber = s.seasonNumber,
+                                    title = ep.title,
+                                    episodeId = "tv_${tvDetail.id}_s${s.seasonNumber}_e${ep.episodeNumber}",
+                                    thumbnail = ep.stillPath,
+                                    releaseDate = ep.releaseDate
+                                )
+                            }
                         )
+                    }
+
+                    return@withContext MediaDetailModel(
+                        id = "tv_$numericId",
+                        title = tvDetail.title,
+                        description = tvDetail.overview.ifBlank { "Full TV series available on NetMirror Global Cloud." },
+                        posterUrl = tvDetail.posterUrl,
+                        backdropUrl = tvDetail.backdropUrl,
+                        mediaType = MediaType.SERIES,
+                        releaseYear = tvDetail.year,
+                        rating = tvDetail.rating,
+                        quality = "1080p HD",
+                        genres = tvDetail.genres,
+                        imdbId = tvDetail.imdbId,
+                        tmdbId = tvDetail.id.toString(),
+                        providerId = providerId,
+                        seasons = mappedSeasons
+                    )
+                }
+            } else {
+                val movieDetail = tmdbClient.getMovieDetails(numericId)
+                if (movieDetail != null) {
+                    return@withContext MediaDetailModel(
+                        id = "movie_$numericId",
+                        title = movieDetail.title,
+                        description = movieDetail.overview.ifBlank { "Full movie available on NetMirror Global Cloud." },
+                        posterUrl = movieDetail.posterUrl,
+                        backdropUrl = movieDetail.backdropUrl,
+                        mediaType = MediaType.MOVIE,
+                        releaseYear = movieDetail.year,
+                        rating = movieDetail.rating,
+                        quality = "1080p HD",
+                        genres = movieDetail.genres,
+                        imdbId = movieDetail.imdbId,
+                        tmdbId = movieDetail.id.toString(),
+                        providerId = providerId
                     )
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting details for $mediaId: ${e.message}", e)
+        }
 
-            val directUrl = root["url"]?.jsonPrimitive?.content
-            if (streamList.isEmpty() && !directUrl.isNullOrBlank()) {
-                val format = if (directUrl.contains(".m3u8", ignoreCase = true)) StreamFormat.HLS else StreamFormat.MP4
-                streamList.add(
-                    StreamSource(
-                        url = directUrl,
-                        quality = "1080p HD",
-                        format = format,
-                        headers = mapOf("Referer" to getBaseUrl()),
-                        serverName = "NetMirror Global Node"
-                    )
-                )
-            }
+        // Resilient fallback
+        MediaDetailModel(
+            id = mediaId,
+            title = "Title Unavailable",
+            description = "Detailed metadata currently unavailable. Click Play to launch stream.",
+            mediaType = if (isSeries) MediaType.SERIES else MediaType.MOVIE,
+            providerId = providerId
+        )
+    }
 
-            ResolvedStreamModel(
-                streams = streamList,
-                headers = mapOf(
-                    "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8)",
-                    "Referer" to getBaseUrl()
-                )
+    override suspend fun getStreams(mediaId: String, season: Int, episode: Int): ResolvedStreamModel = withContext(Dispatchers.IO) {
+        val parsed = parseIdAndType(mediaId, if (season > 0) MediaType.SERIES else MediaType.MOVIE)
+        val numericId = parsed.first
+        val isSeries = parsed.second || season > 0
+
+        try {
+            GlobalStreamResolver.resolveStreams(
+                tmdbId = numericId.toString(),
+                isSeries = isSeries,
+                season = season,
+                episode = episode
             )
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed resolving streams for $mediaId: ${e.message}", e)
             ResolvedStreamModel()
         }
     }
 
-    private fun parseMediaList(jsonStr: String): List<MediaItemModel> {
-        val list = mutableListOf<MediaItemModel>()
-        try {
-            val root = json.parseToJsonElement(jsonStr)
-            val items = if (root is kotlinx.serialization.json.JsonArray) root else root.jsonObject["items"]?.jsonArray ?: return emptyList()
-            for (element in items) {
-                val obj = element.jsonObject
-                val id = obj["id"]?.jsonPrimitive?.content ?: continue
-                val title = obj["title"]?.jsonPrimitive?.content ?: continue
-                val poster = obj["poster"]?.jsonPrimitive?.content
-                val banner = obj["backdrop"]?.jsonPrimitive?.content ?: poster
-                val quality = obj["quality"]?.jsonPrimitive?.content ?: "1080p"
-
-                list.add(
-                    MediaItemModel(
-                        id = id,
-                        title = title,
-                        posterUrl = poster,
-                        bannerUrl = banner,
-                        quality = quality,
-                        providerId = providerId,
-                        isBdix = false,
-                        description = "Global Internet Cloud Stream"
-                    )
-                )
+    private fun parseIdAndType(rawId: String, hintType: String): Pair<Int, Boolean> {
+        val clean = rawId.trim().lowercase()
+        return when {
+            clean.startsWith("tv_") -> {
+                val num = clean.removePrefix("tv_").substringBefore("_").toIntOrNull() ?: 0
+                Pair(num, true)
             }
-        } catch (_: Exception) {
-            // lenient fallback
+            clean.startsWith("series_") -> {
+                val num = clean.removePrefix("series_").substringBefore("_").toIntOrNull() ?: 0
+                Pair(num, true)
+            }
+            clean.startsWith("movie_") -> {
+                val num = clean.removePrefix("movie_").substringBefore("_").toIntOrNull() ?: 0
+                Pair(num, false)
+            }
+            else -> {
+                val num = clean.substringBefore("_").toIntOrNull() ?: 0
+                val isSeries = hintType.equals("series", ignoreCase = true) || hintType.equals("tv", ignoreCase = true)
+                Pair(num, isSeries)
+            }
         }
-        return list
+    }
+
+    private fun TmdbItemSummary.toMediaItemModel(): MediaItemModel {
+        val prefix = if (isSeries) "tv_" else "movie_"
+        return MediaItemModel(
+            id = "$prefix$id",
+            title = title,
+            posterUrl = posterUrl,
+            bannerUrl = backdropUrl,
+            mediaType = if (isSeries) MediaType.SERIES else MediaType.MOVIE,
+            releaseYear = year,
+            rating = rating,
+            quality = quality ?: if (isSeries) "Series" else "1080p",
+            providerId = providerId,
+            isBdix = false,
+            description = if (originalLanguage == "hi") "Bollywood / Hindi Audio" else "Global Internet Cloud Stream"
+        )
     }
 
     companion object {
-        const val DEFAULT_NETMIRROR_URL = "https://netmirror.app"
+        private const val TAG = "NetMirrorProvider"
     }
 }
-
