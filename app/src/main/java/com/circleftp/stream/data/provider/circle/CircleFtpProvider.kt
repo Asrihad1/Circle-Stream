@@ -63,14 +63,21 @@ class CircleFtpProvider(
                 title = "Unavailable",
                 providerId = providerId
             )
-        return detail.toMediaDetailModel(providerId)
+        val model = detail.toMediaDetailModel(providerId)
+        val direct = model.directStreamUrl
+        return if (!direct.isNullOrBlank() && (direct.endsWith("/") || !CircleFtpFolderResolver.hasVideoExtension(direct))) {
+            val resolved = CircleFtpFolderResolver.resolve(direct)
+            model.copy(directStreamUrl = resolved)
+        } else {
+            model
+        }
     }
 
     override suspend fun getStreams(mediaId: String, season: Int, episode: Int): ResolvedStreamModel {
         val postId = parsePostId(mediaId)
         val detail = apiClient.getPostDetail(postId) ?: return ResolvedStreamModel()
 
-        val streamUrl: String? = when {
+        val rawStreamUrl: String? = when {
             detail.isSeries && season > 0 && episode > 0 -> {
                 val targetSeason = detail.seasons.getOrNull(season - 1)
                 targetSeason?.episodes?.getOrNull(episode - 1)?.streamUrl
@@ -87,9 +94,12 @@ class CircleFtpProvider(
             else -> detail.singleStreamUrl
         }
 
-        if (streamUrl.isNullOrBlank()) {
+        if (rawStreamUrl.isNullOrBlank()) {
             return ResolvedStreamModel()
         }
+
+        // Resolves directory URLs (like Jailer 2 ending in /) to the direct .mkv/.mp4 file
+        val streamUrl = CircleFtpFolderResolver.resolve(rawStreamUrl)
 
         val format = when {
             streamUrl.contains(".m3u8", ignoreCase = true) -> StreamFormat.HLS

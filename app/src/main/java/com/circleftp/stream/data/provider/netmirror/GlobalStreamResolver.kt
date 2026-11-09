@@ -55,83 +55,83 @@ object GlobalStreamResolver {
 
         val idParam = imdbId?.takeIf { it.isNotBlank() } ?: tmdbId
 
-        // Mirror 1: VidSrc Cloud CDN
-        val vidsrcUrl = if (isSeries) {
-            "https://vidsrc.me/embed/tv?tmdb=$tmdbId&season=$effectiveSeason&episode=$effectiveEpisode"
+        // Server 1: MultiEmbed (Primary Multi-Language with Hindi/South Indian Audio)
+        val multiEmbedUrl = if (isSeries) {
+            "https://multiembed.mov/?video_id=$idParam&tmdb=1&s=$effectiveSeason&e=$effectiveEpisode"
         } else {
-            "https://vidsrc.me/embed/movie?tmdb=$tmdbId"
+            "https://multiembed.mov/?video_id=$idParam&tmdb=1"
         }
 
-        // Mirror 2: AutoEmbed Direct High-Speed Edge (Supports Dual Audio & Multi-Language)
-        val autoEmbedUrl = if (isSeries) {
-            "https://player.autoembed.cc/embed/tv/$tmdbId/$effectiveSeason/$effectiveEpisode"
+        // Server 2: VidSrc PM (Fast 1080p Cloud Node)
+        val vidsrcPmUrl = if (isSeries) {
+            "https://vidsrc.pm/embed/tv/$tmdbId/$effectiveSeason/$effectiveEpisode"
         } else {
-            "https://player.autoembed.cc/embed/movie/$tmdbId"
+            "https://vidsrc.pm/embed/movie/$tmdbId"
         }
 
-        // Mirror 3: VidSrc.to Mirror
+        // Server 3: VidSrc.to Fast Edge
         val vidsrcToUrl = if (isSeries) {
             "https://vidsrc.to/embed/tv/$tmdbId/$effectiveSeason/$effectiveEpisode"
         } else {
             "https://vidsrc.to/embed/movie/$tmdbId"
         }
 
-        // Mirror 4: SuperEmbed Multi-Audio CDN
-        val superEmbedUrl = if (isSeries) {
-            "https://multiembed.mov/?video_id=$idParam&tmdb=1&s=$effectiveSeason&e=$effectiveEpisode"
+        // Server 4: VidSrc.me Universal Node
+        val vidsrcMeUrl = if (isSeries) {
+            "https://vidsrc.me/embed/tv?tmdb=$tmdbId&season=$effectiveSeason&episode=$effectiveEpisode"
         } else {
-            "https://multiembed.mov/?video_id=$idParam&tmdb=1"
+            "https://vidsrc.me/embed/movie?tmdb=$tmdbId"
         }
 
         streams.add(
             StreamSource(
-                url = autoEmbedUrl,
-                quality = "1080p HD (Multi-Audio)",
-                format = StreamFormat.HLS,
-                headers = mapOf(
-                    "Referer" to "https://autoembed.cc",
-                    "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36"
-                ),
-                serverName = "Server 1 - AutoEmbed (Dual Audio / Hindi)"
-            )
-        )
-
-        streams.add(
-            StreamSource(
-                url = vidsrcUrl,
-                quality = "1080p Full HD",
-                format = StreamFormat.HLS,
-                headers = mapOf(
-                    "Referer" to "https://vidsrc.me",
-                    "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36"
-                ),
-                serverName = "Server 2 - VidSrc CDN"
-            )
-        )
-
-        streams.add(
-            StreamSource(
-                url = superEmbedUrl,
-                quality = "Multi-Language / Hindi Dub",
+                url = multiEmbedUrl,
+                quality = "1080p Multi-Audio / Hindi Dub",
                 format = StreamFormat.HLS,
                 headers = mapOf(
                     "Referer" to "https://multiembed.mov",
                     "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36"
                 ),
-                serverName = "Server 3 - MultiEmbed (Hindi / South Dubbed)"
+                serverName = "Server 1 - MultiEmbed (Hindi / Multi-Audio)"
+            )
+        )
+
+        streams.add(
+            StreamSource(
+                url = vidsrcPmUrl,
+                quality = "1080p Full HD",
+                format = StreamFormat.HLS,
+                headers = mapOf(
+                    "Referer" to "https://vidsrc.pm",
+                    "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36"
+                ),
+                serverName = "Server 2 - VidSrc HD Node"
             )
         )
 
         streams.add(
             StreamSource(
                 url = vidsrcToUrl,
-                quality = "720p / 1080p Fast",
+                quality = "1080p Fast Edge",
                 format = StreamFormat.HLS,
                 headers = mapOf(
                     "Referer" to "https://vidsrc.to",
                     "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36"
                 ),
-                serverName = "Server 4 - VidSrc Fast Mirror"
+                serverName = "Server 3 - VidSrc.to Edge"
+            )
+        )
+
+        streams.add(
+            StreamSource(
+                url = vidsrcMeUrl,
+                quality = "720p / 1080p Universal",
+                format = StreamFormat.HLS,
+                headers = mapOf(
+                    "Referer" to "https://vidsrc.me",
+                    "User-Agent" to "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36"
+                ),
+                serverName = "Server 4 - VidSrc Universal"
             )
         )
 

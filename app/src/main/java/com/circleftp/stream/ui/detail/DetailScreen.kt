@@ -442,13 +442,18 @@ fun DetailScreen(
                                             try {
                                                 // Ensure the exact numeric post ID is passed without episode suffixes
                                                 val targetMediaId = effectiveMediaId.ifBlank { ep.episodeId.substringBefore("_") }
-                                                val resolved = if (!ep.directStreamUrl.isNullOrBlank()) {
+                                                val rawEpUrl = ep.directStreamUrl
+                                                val effectiveEpUrl = if (!rawEpUrl.isNullOrBlank() && (rawEpUrl.endsWith("/") || !com.circleftp.stream.data.provider.circle.CircleFtpFolderResolver.hasVideoExtension(rawEpUrl))) {
+                                                    com.circleftp.stream.data.provider.circle.CircleFtpFolderResolver.resolve(rawEpUrl)
+                                                } else rawEpUrl
+
+                                                val resolved = if (!effectiveEpUrl.isNullOrBlank()) {
                                                     com.circleftp.stream.data.provider.model.ResolvedStreamModel(
                                                         streams = listOf(
                                                             com.circleftp.stream.data.provider.model.StreamSource(
-                                                                url = ep.directStreamUrl,
+                                                                url = effectiveEpUrl,
                                                                 quality = detail.quality ?: "BDIX High-Speed",
-                                                                format = if (ep.directStreamUrl.contains(".m3u8", ignoreCase = true)) {
+                                                                format = if (effectiveEpUrl.contains(".m3u8", ignoreCase = true)) {
                                                                     com.circleftp.stream.data.provider.model.StreamFormat.HLS
                                                                 } else {
                                                                     com.circleftp.stream.data.provider.model.StreamFormat.MP4
@@ -466,7 +471,7 @@ fun DetailScreen(
                                                     )
                                                 }
 
-                                                val playUrl = resolved.primaryStreamUrl ?: ep.directStreamUrl
+                                                val playUrl = resolved.primaryStreamUrl ?: effectiveEpUrl
                                                 if (playUrl.isNullOrBlank()) {
                                                     Toast.makeText(context, "Episode stream currently unavailable", Toast.LENGTH_SHORT).show()
                                                     return@launch
@@ -503,7 +508,10 @@ fun DetailScreen(
                                     },
                                     onDownload = {
                                         ep.directStreamUrl?.let { url ->
-                                            CircleDownloadManager.download(context, ep.title, url)
+                                            coroutineScope.launch {
+                                                val resolved = com.circleftp.stream.data.provider.circle.CircleFtpFolderResolver.resolve(url)
+                                                CircleDownloadManager.download(context, ep.title, resolved)
+                                            }
                                         } ?: Toast.makeText(context, "Direct download link unavailable", Toast.LENGTH_SHORT).show()
                                     }
                                 )
