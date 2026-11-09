@@ -358,7 +358,8 @@ fun DetailScreen(
                                                 parentSeriesId = if (detail.isSeries) effectiveMediaId else null,
                                                 providerId = effectiveProviderId,
                                                 headers = resolved.headers,
-                                                subtitles = resolved.subtitles
+                                                subtitles = resolved.subtitles,
+                                                availableStreams = resolved.streams
                                             )
                                             isResolvingStream = false
                                             AdManager.showInterstitialIfEligible(context) {
@@ -495,7 +496,8 @@ fun DetailScreen(
                                                     parentSeriesId = targetMediaId,
                                                     providerId = effectiveProviderId,
                                                     headers = resolved.headers,
-                                                    subtitles = resolved.subtitles
+                                                    subtitles = resolved.subtitles,
+                                                    availableStreams = resolved.streams
                                                 )
                                                 AdManager.showInterstitialIfEligible(context) {
                                                     onPlay(ep.title, playUrl)

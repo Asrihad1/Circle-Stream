@@ -541,6 +541,7 @@ fun PlayerScreen(
         WebStreamPlayer(
             title = activeTitle,
             streamUrl = activeStreamUrl,
+            availableStreams = ActivePlayerSession.availableStreams,
             onClose = onClose
         )
         return

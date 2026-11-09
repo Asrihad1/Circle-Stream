@@ -2,6 +2,7 @@ package com.circleftp.stream.ui.player
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.os.Message
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
@@ -10,12 +11,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,17 +31,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.circleftp.stream.data.provider.model.StreamSource
+import com.circleftp.stream.ui.theme.CircleCard
 import com.circleftp.stream.ui.theme.CircleDarkBg
 import com.circleftp.stream.ui.theme.CircleRed
 import com.circleftp.stream.ui.theme.TextPrimary
 import com.circleftp.stream.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
+import java.io.ByteArrayInputStream
 
 /**
  * Dedicated Hardware-Accelerated Web Video Player for Global Cloud Streams (NetMirror/Embeds).
  *
  * Provides safe in-app playback for HTML5 multi-audio/embed streaming hosts:
  * - Aggressive ad-popup blocker (blocks spam redirects, malicious popups, and new tab popups).
+ * - Multi-server switching (VidLink, Embed.su, VidSrc, AutoEmbed) with quick 1-tap switching.
+ * - Deep anti-spam & anti-carrier-billing DOM scrubber (+880 SMS, Age Gate, Fake Captchas).
  * - Seamless HTML5 fullscreen video support via WebChromeClient.
  * - Hardware acceleration with Media playback support.
  */
@@ -47,20 +55,43 @@ import kotlinx.coroutines.delay
 fun WebStreamPlayer(
     title: String,
     streamUrl: String,
+    availableStreams: List<StreamSource> = emptyList(),
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var currentStreamUrl by remember(streamUrl) { mutableStateOf(streamUrl) }
+    var activeServerIndex by remember(streamUrl, availableStreams) {
+        val found = availableStreams.indexOfFirst { it.url == streamUrl }
+        mutableIntStateOf(if (found >= 0) found else 0)
+    }
+
     var isLoading by remember { mutableStateOf(true) }
+    var hasError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showServerMenu by remember { mutableStateOf(false) }
+
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var customView by remember { mutableStateOf<View?>(null) }
     var customViewCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
     var showControls by remember { mutableStateOf(true) }
 
-    // Auto-hide top overlay controls after 4 seconds
+    fun selectServer(index: Int) {
+        if (index in availableStreams.indices) {
+            val target = availableStreams[index]
+            activeServerIndex = index
+            currentStreamUrl = target.url
+            hasError = false
+            errorMessage = null
+            isLoading = true
+            webViewRef?.loadUrl(target.url)
+        }
+    }
+
+    // Auto-hide top overlay controls after 5 seconds
     LaunchedEffect(showControls) {
         if (showControls) {
-            delay(4000)
+            delay(5000)
             showControls = false
         }
     }
@@ -80,6 +111,7 @@ fun WebStreamPlayer(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
+            .clickable { showControls = !showControls }
     ) {
         // Main Web Video Player View
         AndroidView(
@@ -96,18 +128,31 @@ fun WebStreamPlayer(
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
+                        databaseEnabled = true
                         mediaPlaybackRequiresUserGesture = false
                         loadWithOverviewMode = true
                         useWideViewPort = true
                         allowFileAccess = false
                         allowContentAccess = false
-                        setSupportMultipleWindows(false)
+                        // Enable multiple windows routing so WebChromeClient.onCreateWindow catches and destroys popups!
+                        setSupportMultipleWindows(true)
                         javaScriptCanOpenWindowsAutomatically = false
+                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                         // Desktop User-Agent prevents ad networks from triggering mobile carrier-billing / SMS gates
                         userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
                     }
 
                     webChromeClient = object : WebChromeClient() {
+                        // Deep popup suppression: Discard all popup/popunder windows created by ad scripts
+                        override fun onCreateWindow(
+                            view: WebView?,
+                            isDialog: Boolean,
+                            isUserGesture: Boolean,
+                            resultMsg: Message?
+                        ): Boolean {
+                            return false // Immediately destroy the popup request
+                        }
+
                         override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
                             customView = view
                             customViewCallback = callback
@@ -119,7 +164,7 @@ fun WebStreamPlayer(
                         }
 
                         override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                            if (newProgress >= 70) {
+                            if (newProgress >= 75) {
                                 isLoading = false
                             }
                         }
@@ -152,20 +197,65 @@ fun WebStreamPlayer(
                             injectAntiSpamScrubber(view)
                         }
 
+                        override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                            if (request?.isForMainFrame == true) {
+                                isLoading = false
+                                hasError = true
+                                val desc = error?.description?.toString() ?: "DNS / Connection issue"
+                                errorMessage = "Mirror connection failed: $desc"
+                            }
+                        }
+
+                        override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                            val reqUrl = request?.url?.toString()?.lowercase() ?: return null
+
+                            // Fast subresource ad-blocking: kill tracking, popups, and scam scripts before execution
+                            if (reqUrl.contains("doubleclick") ||
+                                reqUrl.contains("monetag") ||
+                                reqUrl.contains("clickadu") ||
+                                reqUrl.contains("alwingulla") ||
+                                reqUrl.contains("poringasitia") ||
+                                reqUrl.contains("propellerads") ||
+                                reqUrl.contains("popads") ||
+                                reqUrl.contains("adsterra") ||
+                                reqUrl.contains("borojeet") ||
+                                reqUrl.contains("p-app-link") ||
+                                reqUrl.contains("syndication") ||
+                                reqUrl.contains("adservice")
+                            ) {
+                                return WebResourceResponse("text/plain", "UTF-8", ByteArrayInputStream(ByteArray(0)))
+                            }
+                            return super.shouldInterceptRequest(view, request)
+                        }
+
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                             val uri = request?.url ?: return false
                             val scheme = uri.scheme?.lowercase().orEmpty()
 
-                            // Block non-HTTP protocols (SMS, TEL, WAP, INTENT, MARKET) to prevent carrier billing
+                            // 1. Block non-HTTP protocols (SMS, TEL, WAP, INTENT, MARKET) to prevent carrier billing
                             if (scheme != "http" && scheme != "https") {
                                 return true
                             }
 
                             val destUrl = uri.toString().lowercase()
+                            val destHost = uri.host?.lowercase().orEmpty()
 
-                            // Block known malicious ad, carrier-billing, and verification redirect URLs
+                            // 2. Block search engines (prevent redirect to google.com when mirror is missing title)
+                            if (destHost.contains("google.com") ||
+                                destHost.contains("google.co") ||
+                                destHost.contains("bing.com") ||
+                                destHost.contains("yahoo.com")
+                            ) {
+                                return true
+                            }
+
+                            // 3. Block known malicious ad, carrier-billing, and verification redirect URLs
                             if (destUrl.contains("bet") ||
                                 destUrl.contains("casino") ||
+                                destUrl.contains("borojeet") ||
+                                destUrl.contains("baji") ||
+                                destUrl.contains("1xbet") ||
+                                destUrl.contains("melbet") ||
                                 destUrl.contains("track") ||
                                 destUrl.contains("popunder") ||
                                 destUrl.contains("adservice") ||
@@ -184,20 +274,43 @@ fun WebStreamPlayer(
                                 destUrl.contains("poringasitia") ||
                                 destUrl.contains("monetag") ||
                                 destUrl.contains("alwingulla") ||
-                                destUrl.contains("clickadu")
+                                destUrl.contains("clickadu") ||
+                                destUrl.contains("propeller") ||
+                                destUrl.contains("popads") ||
+                                destUrl.contains("adsterra") ||
+                                destUrl.contains("p-app-link") ||
+                                destUrl.contains("moviesapi.vip")
                             ) {
-                                return true // Block redirect
+                                return true
+                            }
+
+                            // 4. Strict Main Frame Navigation Confinement:
+                            // Prevent embed iframes from hijacking the entire WebView window to unapproved third-party domains
+                            if (request.isForMainFrame) {
+                                val currentHost = android.net.Uri.parse(currentStreamUrl).host?.lowercase().orEmpty()
+                                val isAuthorizedHost = destHost == currentHost ||
+                                    destHost.contains("vidlink.pro") ||
+                                    destHost.contains("embed.su") ||
+                                    destHost.contains("vidsrc") ||
+                                    destHost.contains("autoembed.co") ||
+                                    destHost.contains("stream") ||
+                                    destHost.contains("cdn") ||
+                                    destHost.contains("m3u8")
+
+                                if (!isAuthorizedHost) {
+                                    return true // Block external hijack
+                                }
                             }
 
                             return false // Allow legitimate media player asset loads
                         }
                     }
 
-                    loadUrl(streamUrl)
+                    loadUrl(currentStreamUrl)
                 }
             },
             update = { view ->
-                // Keep loaded
+                // Maintain active instance
             }
         )
 
@@ -229,11 +342,79 @@ fun WebStreamPlayer(
                     CircularProgressIndicator(color = CircleRed)
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Loading Cloud Stream...",
+                        text = "Connecting to ${availableStreams.getOrNull(activeServerIndex)?.serverName?.substringBefore(" -") ?: "Cloud Stream"}...",
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     )
+                }
+            }
+        }
+
+        // Stream Error Fallback Banner
+        if (hasError) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.85f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = CircleCard,
+                    border = BorderStroke(1.dp, CircleRed),
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .widthIn(max = 420.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Warning",
+                            tint = CircleRed,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Stream Unavailable on This Server",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = errorMessage ?: "The current mirror could not provide this stream.",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        if (availableStreams.size > 1) {
+                            val nextIndex = (activeServerIndex + 1) % availableStreams.size
+                            val nextServerName = availableStreams[nextIndex].serverName ?: "Server ${nextIndex + 1}"
+                            Button(
+                                onClick = { selectServer(nextIndex) },
+                                colors = ButtonDefaults.buttonColors(containerColor = CircleRed),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Switch to $nextServerName")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = onClose,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Go Back", color = TextPrimary)
+                        }
+                    }
                 }
             }
         }
@@ -252,13 +433,13 @@ fun WebStreamPlayer(
                         Brush.verticalGradient(
                             colors = listOf(
                                 CircleDarkBg.copy(alpha = 0.95f),
-                                CircleDarkBg.copy(alpha = 0.6f),
+                                CircleDarkBg.copy(alpha = 0.65f),
                                 Color.Transparent
                             )
                         )
                     )
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -275,13 +456,13 @@ fun WebStreamPlayer(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = title,
                             color = Color.White,
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -292,7 +473,7 @@ fun WebStreamPlayer(
                                 color = CircleRed
                             ) {
                                 Text(
-                                    text = "Global Cloud Player",
+                                    text = "Global Cloud",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
@@ -304,6 +485,103 @@ fun WebStreamPlayer(
                                 text = "Auto Dual-Audio / Hindi",
                                 fontSize = 11.sp,
                                 color = TextSecondary
+                            )
+                        }
+                    }
+
+                    // In-Player Multi-Server Switcher Dropdown
+                    if (availableStreams.size > 1) {
+                        Box {
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = CircleCard.copy(alpha = 0.85f),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
+                                modifier = Modifier.clickable { showServerMenu = true }
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Server",
+                                        tint = CircleRed,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = "Server ${activeServerIndex + 1}",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = showServerMenu,
+                                onDismissRequest = { showServerMenu = false },
+                                modifier = Modifier.background(CircleDarkBg)
+                            ) {
+                                availableStreams.forEachIndexed { idx, src ->
+                                    val isSelected = idx == activeServerIndex
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(
+                                                    text = src.serverName ?: "Server ${idx + 1}",
+                                                    color = if (isSelected) CircleRed else Color.White,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    fontSize = 13.sp
+                                                )
+                                                if (!src.quality.isNullOrBlank()) {
+                                                    Text(
+                                                        text = src.quality,
+                                                        color = TextSecondary,
+                                                        fontSize = 11.sp
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            showServerMenu = false
+                                            selectServer(idx)
+                                        },
+                                        trailingIcon = {
+                                            if (isSelected) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Active",
+                                                    tint = CircleRed,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Fast Next Server Button
+                        IconButton(
+                            onClick = {
+                                val nextIdx = (activeServerIndex + 1) % availableStreams.size
+                                selectServer(nextIdx)
+                            },
+                            colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.5f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Next Mirror",
+                                tint = Color.White
                             )
                         }
                     }
@@ -325,14 +603,27 @@ fun WebStreamPlayer(
 }
 
 /**
- * Deep anti-spam & anti-carrier-billing DOM scrubber.
+ * Deep anti-spam, anti-carrier-billing & anti-fake-captcha DOM scrubber.
  * Permanently removes fake "Age Verification", SMS verification prompts, WAP billing gates,
- * and malicious popup overlays from third-party embed streaming hosts.
+ * fake Cloudflare/Robot checks, and malicious popup overlays from third-party embed streaming hosts.
  */
 private fun injectAntiSpamScrubber(view: WebView?) {
     val jsCode = """
         (function() {
-            // 1. Inject aggressive CSS to auto-hide and unblock overlays
+            // 1. Neutralize aggressive JS window manipulation and permission spam
+            try {
+                window.open = function() { return null; };
+                window.alert = function() { return true; };
+                window.confirm = function() { return true; };
+                window.prompt = function() { return null; };
+                if (window.Notification) {
+                    window.Notification.requestPermission = function() { return Promise.resolve('denied'); };
+                }
+                // Suppress frame-busting top-level redirects
+                window.onbeforeunload = null;
+            } catch(e) {}
+
+            // 2. Inject aggressive CSS to auto-hide and unblock overlays
             var styleId = 'circle_anti_spam_shield';
             if (!document.getElementById(styleId)) {
                 var style = document.createElement('style');
@@ -340,25 +631,38 @@ private fun injectAntiSpamScrubber(view: WebView?) {
                 style.innerHTML = `
                     div[class*="ad"], iframe[src*="doubleclick"], div[id*="pop"], .banner-ad,
                     div[class*="verify"], div[id*="verify"], div[class*="age-gate"], div[id*="age"],
+                    div[class*="carrier"], div[id*="carrier"], div[class*="turnstile"], div[id*="turnstile"],
+                    div[class*="recaptcha"], div[id*="recaptcha"],
                     .modal-backdrop, .overlay-popup, [data-ad], [id*="ad_"] {
                         display: none !important;
                         opacity: 0 !important;
                         pointer-events: none !important;
                         visibility: hidden !important;
+                        z-index: -9999 !important;
+                    }
+                    body, html {
+                        overflow: auto !important;
                     }
                     video {
                         width: 100% !important;
                         height: 100% !important;
+                        z-index: 9999 !important;
+                        pointer-events: auto !important;
                     }
                 `;
                 (document.head || document.documentElement).appendChild(style);
             }
 
-            // 2. Active DOM node scrubber: continuously search and delete fake verification modals
+            // 3. Active DOM node scrubber: continuously search and delete fake verification modals & fake captchas
             function scrubModals() {
-                var targets = document.querySelectorAll('div, section, modal, dialog, .overlay, .popup, .modal');
+                var targets = document.querySelectorAll('div, section, modal, dialog, .overlay, .popup, .modal, p, span, form, button');
                 targets.forEach(function(el) {
-                    var txt = (el.innerText || '').toLowerCase();
+                    // Do not remove video players or player containers
+                    if (el.querySelector('video') || el.tagName.toLowerCase() === 'video') {
+                        return;
+                    }
+
+                    var txt = (el.innerText || el.textContent || '').toLowerCase();
                     if (txt.includes('verification code') ||
                         txt.includes('age verification') ||
                         txt.includes('intended for people over 18') ||
@@ -366,19 +670,25 @@ private fun injectAntiSpamScrubber(view: WebView?) {
                         txt.includes('verification code was sent') ||
                         txt.includes('+880') ||
                         txt.includes('resend') ||
-                        txt.includes('yes, i am 18')
+                        txt.includes('yes, i am 18') ||
+                        txt.includes('not a robot') ||
+                        txt.includes('check the box if you are not a robot') ||
+                        txt.includes('verify you are human') ||
+                        txt.includes('recaptcha') ||
+                        txt.includes('turnstile') ||
+                        txt.includes('borojeet') ||
+                        txt.includes('carrier billing')
                     ) {
                         el.style.display = 'none';
-                        el.remove();
+                        try { el.remove(); } catch(err) {}
                     }
                 });
             }
 
             scrubModals();
-            setInterval(scrubModals, 350);
+            setInterval(scrubModals, 300);
         })();
     """.trimIndent()
 
     view?.evaluateJavascript(jsCode, null)
 }
-

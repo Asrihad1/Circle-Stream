@@ -62,25 +62,32 @@ object GlobalStreamResolver {
             "https://vidlink.pro/movie/$tmdbId?primaryColor=E50914&autoplay=true"
         }
 
-        // Server 2: VidSrc PM (Fast 1080p Cloud Node)
-        val vidsrcPmUrl = if (isSeries) {
-            "https://vidsrc.pm/embed/tv/$tmdbId/$effectiveSeason/$effectiveEpisode"
+        // Server 2: Embed.su (Massive library with Indian/Bollywood, Hindi Dubbed & Global HD streams)
+        val embedSuUrl = if (isSeries) {
+            "https://embed.su/embed/tv/$tmdbId/$effectiveSeason/$effectiveEpisode"
         } else {
-            "https://vidsrc.pm/embed/movie/$tmdbId"
+            "https://embed.su/embed/movie/$tmdbId"
         }
 
-        // Server 3: AutoEmbed Edge (Fast Multi-CDN)
+        // Server 3: VidSrc v2 Cloud (Fast Cloud CDN)
+        val vidsrcCcUrl = if (isSeries) {
+            "https://vidsrc.cc/v2/embed/tv/$tmdbId/$effectiveSeason/$effectiveEpisode"
+        } else {
+            "https://vidsrc.cc/v2/embed/movie/$tmdbId"
+        }
+
+        // Server 4: AutoEmbed Edge (Fast Multi-CDN)
         val autoEmbedUrl = if (isSeries) {
             "https://autoembed.co/tv/tmdb/$tmdbId-$effectiveSeason-$effectiveEpisode"
         } else {
             "https://autoembed.co/movie/tmdb/$tmdbId"
         }
 
-        // Server 4: VidSrc.to Edge
-        val vidsrcToUrl = if (isSeries) {
-            "https://vidsrc.to/embed/tv/$tmdbId/$effectiveSeason/$effectiveEpisode"
+        // Server 5: VidSrc PM (Fast 1080p Cloud Node)
+        val vidsrcPmUrl = if (isSeries) {
+            "https://vidsrc.pm/embed/tv/$tmdbId/$effectiveSeason/$effectiveEpisode"
         } else {
-            "https://vidsrc.to/embed/movie/$tmdbId"
+            "https://vidsrc.pm/embed/movie/$tmdbId"
         }
 
         streams.add(
@@ -98,14 +105,27 @@ object GlobalStreamResolver {
 
         streams.add(
             StreamSource(
-                url = vidsrcPmUrl,
-                quality = "1080p Full HD",
+                url = embedSuUrl,
+                quality = "1080p Full HD (Hindi / Bollywood / Global)",
                 format = StreamFormat.HLS,
                 headers = mapOf(
-                    "Referer" to "https://vidsrc.pm",
+                    "Referer" to "https://embed.su",
                     "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 ),
-                serverName = "Server 2 - VidSrc HD Node"
+                serverName = "Server 2 - Embed.su (Hindi / Global HD)"
+            )
+        )
+
+        streams.add(
+            StreamSource(
+                url = vidsrcCcUrl,
+                quality = "1080p Fast Cloud",
+                format = StreamFormat.HLS,
+                headers = mapOf(
+                    "Referer" to "https://vidsrc.cc",
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                ),
+                serverName = "Server 3 - VidSrc v2 Cloud"
             )
         )
 
@@ -118,20 +138,20 @@ object GlobalStreamResolver {
                     "Referer" to "https://autoembed.co",
                     "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 ),
-                serverName = "Server 3 - AutoEmbed Edge"
+                serverName = "Server 4 - AutoEmbed Edge"
             )
         )
 
         streams.add(
             StreamSource(
-                url = vidsrcToUrl,
-                quality = "720p / 1080p Fast",
+                url = vidsrcPmUrl,
+                quality = "1080p Full HD",
                 format = StreamFormat.HLS,
                 headers = mapOf(
-                    "Referer" to "https://vidsrc.to",
+                    "Referer" to "https://vidsrc.pm",
                     "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 ),
-                serverName = "Server 4 - VidSrc.to Mirror"
+                serverName = "Server 5 - VidSrc HD Node"
             )
         )
 

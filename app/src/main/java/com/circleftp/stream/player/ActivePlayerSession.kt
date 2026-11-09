@@ -25,6 +25,7 @@ object ActivePlayerSession {
     var providerId: String = "circleftp"
     var headers: Map<String, String> = emptyMap()
     var subtitles: List<SubtitleTrack> = emptyList()
+    var availableStreams: List<com.circleftp.stream.data.provider.model.StreamSource> = emptyList()
 
     fun set(
         title: String,
@@ -41,7 +42,8 @@ object ActivePlayerSession {
         mediaId: String? = null,
         providerId: String = "circleftp",
         headers: Map<String, String> = emptyMap(),
-        subtitles: List<SubtitleTrack> = emptyList()
+        subtitles: List<SubtitleTrack> = emptyList(),
+        availableStreams: List<com.circleftp.stream.data.provider.model.StreamSource> = emptyList()
     ) {
         this.title = title
         this.streamUrl = UrlNormalizer.normalize(streamUrl)
@@ -52,6 +54,7 @@ object ActivePlayerSession {
         this.providerId = providerId
         this.headers = headers
         this.subtitles = subtitles
+        this.availableStreams = availableStreams
 
         if (isSeries) {
             if (index >= 0) {
