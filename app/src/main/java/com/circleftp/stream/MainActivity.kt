@@ -53,6 +53,7 @@ import com.circleftp.stream.ui.theme.TextSecondary
 import com.circleftp.stream.updater.AppUpdater
 import com.circleftp.stream.updater.AutoUpdateDialogHost
 import com.circleftp.stream.updater.CircleUpdateManager
+import com.circleftp.stream.utils.AdsterraManager
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -84,7 +85,7 @@ class MainActivity : ComponentActivity() {
      * Reusable helper function for actions requiring interstitial/monetization callback.
      */
     fun showInterstitialAd(onComplete: () -> Unit = {}) {
-        onComplete()
+        AdsterraManager.showAd(this) { onComplete() }
     }
 }
 
@@ -205,7 +206,8 @@ fun CircleStreamApp() {
                     navController.navigate("detail/circleftp/$postId")
                 },
                 onResumePlayback = { historyItem ->
-                    val resolvedPostId = historyItem.parentSeriesId?.toLongOrNull()
+                    AdsterraManager.showAd(context) {
+                        val resolvedPostId = historyItem.parentSeriesId?.toLongOrNull()
                         ?: historyItem.mediaId.removePrefix("series_").removePrefix("movie_").toLongOrNull()
                         ?: 0L
                     ActivePlayerSession.set(
@@ -224,7 +226,8 @@ fun CircleStreamApp() {
                             -1
                         }
                     )
-                    navController.navigate("player")
+                        navController.navigate("player")
+                    }
                 },
                 onOpenSearch = {
                     navController.navigate("search")
@@ -263,7 +266,9 @@ fun CircleStreamApp() {
                                 providerId = "iptvidn",
                                 headers = resolved.headers
                             )
-                            navController.navigate("player")
+                            AdsterraManager.showAd(context) {
+                                navController.navigate("player")
+                            }
                         } else {
                             Toast.makeText(context, "Channel stream currently unavailable at source", Toast.LENGTH_SHORT).show()
                         }

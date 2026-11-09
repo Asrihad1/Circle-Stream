@@ -157,4 +157,7 @@ dependencies {
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-crashlytics")
     implementation("com.google.firebase:firebase-config")
+
+    // AndroidX Browser (Chrome Custom Tabs for Adsterra Smartlink)
+    implementation("androidx.browser:browser:1.8.0")
 }
