@@ -41,7 +41,7 @@ import com.circleftp.stream.player.ActivePlayerSession
 import com.circleftp.stream.player.CircleDownloadManager
 import com.circleftp.stream.player.UrlNormalizer
 import com.circleftp.stream.ui.theme.*
-import com.circleftp.stream.utils.AdManager
+import com.circleftp.stream.utils.WortiseManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -362,7 +362,7 @@ fun DetailScreen(
                                                 availableStreams = resolved.streams
                                             )
                                             isResolvingStream = false
-                                            AdManager.showInterstitialIfEligible(context) {
+                                            WortiseManager.showAd(context) {
                                                 onPlay(detail.title, playUrl)
                                             }
                                         } catch (e: Exception) {
@@ -499,7 +499,7 @@ fun DetailScreen(
                                                     subtitles = resolved.subtitles,
                                                     availableStreams = resolved.streams
                                                 )
-                                                AdManager.showInterstitialIfEligible(context) {
+                                                WortiseManager.showAd(context) {
                                                     onPlay(ep.title, playUrl)
                                                 }
                                             } catch (e: Exception) {

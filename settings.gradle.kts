@@ -18,12 +18,10 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = java.net.URI("https://jitpack.io") }
-        maven {
-            url = java.net.URI("https://ads.start.io/maven")
-            content {
-                includeGroup("com.startapp.legacy")
-            }
-        }
+        maven { url = java.net.URI("https://maven.wortise.com/artifactory/public") }
+        maven { url = java.net.URI("https://cboost.jfrog.io/artifactory/chartboost-ads/") }
+        maven { url = java.net.URI("https://artifact.bytedance.com/repository/pangle") }
+        maven { url = java.net.URI("https://artifactory.bidmachine.io/bidmachine") }
     }
 }
 

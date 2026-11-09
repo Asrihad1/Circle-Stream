@@ -35,7 +35,7 @@ import com.circleftp.stream.data.local.WatchHistoryEntity
 import com.circleftp.stream.data.local.WatchLaterEntity
 import com.circleftp.stream.data.sync.AuthSyncManager
 import com.circleftp.stream.ui.theme.*
-import com.circleftp.stream.utils.AdManager
+import com.circleftp.stream.utils.WortiseManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -136,7 +136,7 @@ fun LibraryScreen(
                                 WatchLaterCard(
                                     item = item,
                                     onClick = {
-                                        AdManager.showInterstitialIfEligible(context) {
+                                        WortiseManager.showAd(context) {
                                             onPlayWatchLater(item)
                                         }
                                     },
@@ -170,7 +170,7 @@ fun LibraryScreen(
                                 WatchedCard(
                                     item = item,
                                     onClick = {
-                                        AdManager.showInterstitialIfEligible(context) {
+                                        WortiseManager.showAd(context) {
                                             onPlayMedia(item)
                                         }
                                     }

@@ -53,8 +53,7 @@ import com.circleftp.stream.ui.theme.TextSecondary
 import com.circleftp.stream.updater.AppUpdater
 import com.circleftp.stream.updater.AutoUpdateDialogHost
 import com.circleftp.stream.updater.CircleUpdateManager
-import com.circleftp.stream.utils.AdManager
-import com.circleftp.stream.utils.StartIoManager
+import com.circleftp.stream.utils.WortiseManager
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -74,8 +73,8 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        // Initialize Start.io Monetization SDK via StartIoManager
-        StartIoManager.init(this)
+        // Initialize Wortise Monetization SDK via WortiseManager
+        WortiseManager.init(this)
 
         setContent {
             CircleStreamTheme {
@@ -88,7 +87,7 @@ class MainActivity : ComponentActivity() {
      * Reusable helper function to load and display an interstitial ad with debug logging callbacks.
      */
     fun showInterstitialAd(onComplete: () -> Unit = {}) {
-        StartIoManager.showInterstitial(this, onComplete)
+        WortiseManager.showAd(this) { onComplete() }
     }
 }
 
@@ -209,7 +208,7 @@ fun CircleStreamApp() {
                     navController.navigate("detail/circleftp/$postId")
                 },
                 onResumePlayback = { historyItem ->
-                    StartIoManager.showInterstitial(context) {
+                    WortiseManager.showAd(context) {
                         val resolvedPostId = historyItem.parentSeriesId?.toLongOrNull()
                             ?: historyItem.mediaId.removePrefix("series_").removePrefix("movie_").toLongOrNull()
                             ?: 0L
@@ -269,7 +268,7 @@ fun CircleStreamApp() {
                                 providerId = "iptvidn",
                                 headers = resolved.headers
                             )
-                            StartIoManager.showInterstitial(context) {
+                            WortiseManager.showAd(context) {
                                 navController.navigate("player")
                             }
                         } else {
@@ -308,7 +307,7 @@ fun CircleStreamApp() {
                 mediaId = mediaId,
                 onBack = { navController.popBackStack() },
                 onPlay = { _, _ ->
-                    StartIoManager.showInterstitial(context) {
+                    WortiseManager.showAd(context) {
                         navController.navigate("player")
                     }
                 }
@@ -327,7 +326,7 @@ fun CircleStreamApp() {
                 onBack = { navController.popBackStack() },
                 onPlay = { _, _ ->
                     ActivePlayerSession.postId = postId
-                    StartIoManager.showInterstitial(context) {
+                    WortiseManager.showAd(context) {
                         navController.navigate("player")
                     }
                 }
@@ -392,7 +391,7 @@ fun CircleStreamApp() {
                             -1
                         }
                     )
-                    StartIoManager.showInterstitial(context) {
+                    WortiseManager.showAd(context) {
                         navController.navigate("player")
                     }
                 },
@@ -406,7 +405,7 @@ fun CircleStreamApp() {
                         posterUrl = item.posterUrl,
                         isSeries = item.isSeries
                     )
-                    StartIoManager.showInterstitial(context) {
+                    WortiseManager.showAd(context) {
                         navController.navigate("player")
                     }
                 },

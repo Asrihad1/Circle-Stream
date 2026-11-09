@@ -28,9 +28,6 @@ android {
         versionCode = 2
         versionName = "1.3.1"
 
-        val startIoAppId = localProperties.getProperty("STARTIO_APP_ID") ?: "210959821"
-        buildConfigField("String", "STARTIO_APP_ID", "\"$startIoAppId\"")
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -161,6 +158,6 @@ dependencies {
     implementation("com.google.firebase:firebase-crashlytics")
     implementation("com.google.firebase:firebase-config")
 
-    // Start.io In-App Ad SDK
-    implementation("com.startapp:inapp-sdk:5.1.0")
+    // Wortise In-App Ad SDK
+    implementation("com.wortise:android-sdk:1.7.+")
 }

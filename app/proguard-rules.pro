@@ -57,6 +57,7 @@
     public static int i(...);
 }
 
-# 8. Start.io In-App Ad SDK ProGuard Rules
--keep class com.startapp.** { *; }
--dontwarn com.startapp.**
+# 8. Wortise In-App Ad SDK ProGuard Rules
+-keep class com.wortise.ads.** { *; }
+-dontwarn com.wortise.ads.**
+-dontwarn com.unity3d.**
