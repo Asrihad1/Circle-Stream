@@ -425,15 +425,6 @@ private data class ProviderVisualMeta(
 
 private fun getProviderVisualMeta(provider: MediaSourceProvider): ProviderVisualMeta {
     return when (provider.providerId.lowercase()) {
-        "netmirror" -> ProviderVisualMeta(
-            icon = Icons.Default.Movie,
-            accentColor = CircleRed,
-            badgeText = "Global Internet",
-            badgeBgColor = Color(0xFF5A0000),
-            badgeTextColor = Color(0xFFFF8A80),
-            subtitle = "Global Cloud Mirror",
-            description = "Watch movies and series from any Wi-Fi or mobile data network worldwide."
-        )
         "circleftp", "circle_ftp" -> ProviderVisualMeta(
             icon = Icons.Default.Bolt,
             accentColor = Color(0xFF00E676),

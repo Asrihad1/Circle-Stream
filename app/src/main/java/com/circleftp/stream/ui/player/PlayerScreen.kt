@@ -368,26 +368,13 @@ fun PlayerScreen(
         }
     }
 
-    val isInitialWebStream = remember(activeStreamUrl) {
-        ActivePlayerSession.providerId == "netmirror" ||
-        activeStreamUrl.contains("/embed", ignoreCase = true) ||
-        activeStreamUrl.contains("autoembed", ignoreCase = true) ||
-        activeStreamUrl.contains("vidsrc", ignoreCase = true) ||
-        activeStreamUrl.contains("multiembed", ignoreCase = true)
-    }
-    var isWebStreamMode by remember(activeStreamUrl) {
-        mutableStateOf(isInitialWebStream)
-    }
-
     // Player instance built with PotPlayer OpenCodec & HW/HW+/SW selection
     val player = remember(retryTrigger, currentDecoderMode, activeStreamUrl) {
         CircleVideoPlayerFactory.create(context, currentDecoderMode).apply {
             val mediaItem = CircleVideoPlayerFactory.buildMediaItem(activeTitle, activeStreamUrl, ActivePlayerSession.subtitles)
             setMediaItem(mediaItem)
-            if (!isWebStreamMode) {
-                prepare()
-                playWhenReady = true
-            }
+            prepare()
+            playWhenReady = true
 
             // Volume boost for SW mode
             if (currentDecoderMode == DecoderMode.SW) {
@@ -445,20 +432,6 @@ fun PlayerScreen(
                             playbackError = null
                             return
                         }
-                    }
-
-                    // Intelligent Extractor / Web Stream Fallback:
-                    // If ExoPlayer cannot extract binary video because the URL returned an HTML embed/web player,
-                    // seamlessly fall back to the hardware-accelerated WebStreamPlayer
-                    if (errorMsg.contains("None of the available extractors", ignoreCase = true) ||
-                        errorMsg.contains("UnrecognizedInputFormatException", ignoreCase = true) ||
-                        error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
-                        error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED
-                    ) {
-                        android.util.Log.i("PlayerScreen", "Container extraction failed; transitioning to WebStreamPlayer for $activeStreamUrl")
-                        isWebStreamMode = true
-                        playbackError = null
-                        return
                     }
 
                     playbackError = "Stream Error: $errorMsg"
@@ -531,20 +504,6 @@ fun PlayerScreen(
 
     BackHandler {
         onClose()
-    }
-
-    if (isWebStreamMode) {
-        DisposableEffect(Unit) {
-            player.pause()
-            onDispose { }
-        }
-        WebStreamPlayer(
-            title = activeTitle,
-            streamUrl = activeStreamUrl,
-            availableStreams = ActivePlayerSession.availableStreams,
-            onClose = onClose
-        )
-        return
     }
 
     Box(

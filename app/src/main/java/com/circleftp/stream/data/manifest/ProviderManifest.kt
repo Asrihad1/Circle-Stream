@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
  * which streaming providers are alive, in which order to show them, and which ones
  * must be shut off immediately (kill switch) — without shipping a new APK.
  *
- * Pattern adapted from NetMirror's `/v2/resolvers/manifest` + `/v2/resolvers/killswitch`.
+ * Pattern for dynamic remote manifest and killswitch support.
  *
  * Example:
  * ```json

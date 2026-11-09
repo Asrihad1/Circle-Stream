@@ -32,13 +32,12 @@ class ProviderRegistry private constructor(
 
     private val circleFtpProvider = CircleFtpProvider(configManager)
     private val iptvIdnProvider = IptvIdnProvider(configManager)
-    private val netMirrorProvider = com.circleftp.stream.data.provider.netmirror.NetMirrorProvider(configManager)
 
     private val _activeProviderFlow = MutableStateFlow<MediaSourceProvider>(circleFtpProvider)
     val activeProviderFlow: StateFlow<MediaSourceProvider> = _activeProviderFlow.asStateFlow()
 
     /** Built-in providers in their default display order (index = default priority). */
-    private val builtInProviders: List<MediaSourceProvider> = listOf(circleFtpProvider, iptvIdnProvider, netMirrorProvider)
+    private val builtInProviders: List<MediaSourceProvider> = listOf(circleFtpProvider, iptvIdnProvider)
 
     private val _availableProvidersFlow = MutableStateFlow(builtInProviders)
 
@@ -52,13 +51,11 @@ class ProviderRegistry private constructor(
         // Register Core Providers
         registerProvider(circleFtpProvider)
         registerProvider(iptvIdnProvider)
-        registerProvider(netMirrorProvider)
 
         // Compatibility aliases
         providers["circle_ftp"] = circleFtpProvider
         providers["iptv"] = iptvIdnProvider
         providers["live_tv"] = iptvIdnProvider
-        providers["net_mirror"] = netMirrorProvider
 
         // Restore active provider choice from SharedPreferences, migrating away from deprecated sources
         val savedProviderId = prefs.getString(KEY_ACTIVE_PROVIDER, DEFAULT_PROVIDER_ID) ?: DEFAULT_PROVIDER_ID

@@ -16,8 +16,7 @@ import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 /**
- * Pre-flight mirror health check & latency ranking (adapted from NetMirror's
- * `assessCdnHostsAsync` / `rankServersAsync` resolver bridge capabilities).
+ * Pre-flight mirror health check & latency ranking across streaming CDN hosts.
  *
  * When a provider returns several stream mirrors, each one is probed in parallel and
  * the list is reordered fastest-first with dead mirrors moved to the end.
