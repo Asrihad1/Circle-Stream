@@ -1,6 +1,10 @@
 package com.circleftp.stream.ui.player
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.os.Message
 import android.view.View
@@ -8,6 +12,9 @@ import android.view.ViewGroup
 import android.webkit.*
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -74,6 +81,7 @@ fun WebStreamPlayer(
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var customView by remember { mutableStateOf<View?>(null) }
     var customViewCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
+    var chromeClientRef by remember { mutableStateOf<WebChromeClient?>(null) }
     var showControls by remember { mutableStateOf(true) }
 
     fun loadUrlWithValidationHeaders(targetUrl: String, customHeaders: Map<String, String> = emptyMap()) {
@@ -106,10 +114,18 @@ fun WebStreamPlayer(
         }
     }
 
+    // Cleanly exit fullscreen on lifecycle disposal
+    DisposableEffect(Unit) {
+        onDispose {
+            if (customView != null) {
+                chromeClientRef?.onHideCustomView()
+            }
+        }
+    }
+
     BackHandler {
         if (customView != null) {
-            customViewCallback?.onCustomViewHidden()
-            customView = null
+            chromeClientRef?.onHideCustomView()
         } else if (webViewRef?.canGoBack() == true) {
             webViewRef?.goBack()
         } else {
@@ -154,6 +170,10 @@ fun WebStreamPlayer(
                     }
 
                     webChromeClient = object : WebChromeClient() {
+                        init {
+                            chromeClientRef = this
+                        }
+
                         // Prevents broken media / default gray film icon from showing during HTML5 video buffer
                         override fun getDefaultVideoPoster(): Bitmap? {
                             return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
@@ -170,13 +190,58 @@ fun WebStreamPlayer(
                         }
 
                         override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                            if (view == null) return
+
+                            // If another custom view is showing, dismiss it first
+                            if (customView != null) {
+                                onHideCustomView()
+                                return
+                            }
+
                             customView = view
                             customViewCallback = callback
+
+                            val act = context.findActivity()
+                            val rootLayout = act?.findViewById<ViewGroup>(android.R.id.content)
+
+                            (view.parent as? ViewGroup)?.removeView(view)
+                            view.layoutParams = FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                            view.setBackgroundColor(android.graphics.Color.BLACK)
+                            rootLayout?.addView(view)
+
+                            act?.let { a ->
+                                a.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                a.window?.let { win ->
+                                    val insetsController = WindowCompat.getInsetsController(win, win.decorView)
+                                    insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                                    insetsController.hide(WindowInsetsCompat.Type.systemBars())
+                                }
+                            }
                         }
 
                         override fun onHideCustomView() {
+                            val act = context.findActivity()
+                            val rootLayout = act?.findViewById<ViewGroup>(android.R.id.content)
+
+                            customView?.let { cv ->
+                                rootLayout?.removeView(cv)
+                                (cv.parent as? ViewGroup)?.removeView(cv)
+                            }
+                            customViewCallback?.onCustomViewHidden()
+
                             customView = null
                             customViewCallback = null
+
+                            act?.let { a ->
+                                a.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                                a.window?.let { win ->
+                                    val insetsController = WindowCompat.getInsetsController(win, win.decorView)
+                                    insetsController.show(WindowInsetsCompat.Type.systemBars())
+                                }
+                            }
                         }
 
                         override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -336,22 +401,6 @@ fun WebStreamPlayer(
                 // Maintain active instance
             }
         )
-
-        // Fullscreen Custom View (when video element requests HTML5 fullscreen)
-        if (customView != null) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { ctx ->
-                    FrameLayout(ctx).apply {
-                        setBackgroundColor(android.graphics.Color.BLACK)
-                        customView?.let { cv ->
-                            (cv.parent as? ViewGroup)?.removeView(cv)
-                            addView(cv, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-                        }
-                    }
-                }
-            )
-        }
 
         // Loading Spinner Overlay
         if (isLoading) {
@@ -684,7 +733,7 @@ private fun injectAntiSpamScrubber(view: WebView?) {
                 (document.head || document.documentElement).appendChild(style);
             }
 
-            // 3. Ensure audio output is unmuted, volume is 100%, and media controls are displayed
+            // 3. Ensure audio output is unmuted, volume is 100%, and media controls + fullscreen are active
             function ensureAudioAndControls() {
                 var vids = document.querySelectorAll('video');
                 vids.forEach(function(v) {
@@ -693,6 +742,16 @@ private fun injectAntiSpamScrubber(view: WebView?) {
                     }
                     v.volume = 1.0;
                     v.controls = true;
+                });
+
+                var iframes = document.querySelectorAll('iframe');
+                iframes.forEach(function(f) {
+                    if (!f.hasAttribute('allowfullscreen')) {
+                        f.setAttribute('allowfullscreen', 'true');
+                        f.setAttribute('webkitallowfullscreen', 'true');
+                        f.setAttribute('mozallowfullscreen', 'true');
+                        f.setAttribute('allow', 'fullscreen; autoplay; encrypted-media');
+                    }
                 });
             }
 
@@ -735,4 +794,16 @@ private fun injectAntiSpamScrubber(view: WebView?) {
     """.trimIndent()
 
     view?.evaluateJavascript(jsCode, null)
+}
+
+/**
+ * Safely resolves the nearest Activity from a Compose Context.
+ */
+private fun Context.findActivity(): Activity? {
+    var ctx = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }
