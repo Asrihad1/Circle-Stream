@@ -121,7 +121,6 @@ fun WebStreamPlayer(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
-            .clickable { showControls = !showControls }
     ) {
         // Main Web Video Player View
         AndroidView(
@@ -134,6 +133,7 @@ fun WebStreamPlayer(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
 
+                    setLayerType(View.LAYER_TYPE_HARDWARE, null)
                     setBackgroundColor(android.graphics.Color.BLACK)
                     settings.apply {
                         javaScriptEnabled = true
@@ -154,6 +154,11 @@ fun WebStreamPlayer(
                     }
 
                     webChromeClient = object : WebChromeClient() {
+                        // Prevents broken media / default gray film icon from showing during HTML5 video buffer
+                        override fun getDefaultVideoPoster(): Bitmap? {
+                            return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+                        }
+
                         // Deep popup suppression: Discard all popup/popunder windows created by ad scripts
                         override fun onCreateWindow(
                             view: WebView?,
@@ -664,15 +669,36 @@ private fun injectAntiSpamScrubber(view: WebView?) {
                     video {
                         width: 100% !important;
                         height: 100% !important;
-                        z-index: 9999 !important;
+                        object-fit: contain !important;
+                    }
+                    /* Ensure native & custom player UI control bars are always visible on top with pointer interaction */
+                    video::-webkit-media-controls,
+                    .jw-controls, .plyr__controls, .vjs-control-bar, [class*="control-bar"], [class*="player-controls"], [class*="player-ui"] {
+                        display: flex !important;
+                        opacity: 1 !important;
+                        visibility: visible !important;
+                        z-index: 2147483647 !important;
                         pointer-events: auto !important;
                     }
                 `;
                 (document.head || document.documentElement).appendChild(style);
             }
 
-            // 3. Active DOM node scrubber: continuously search and delete fake verification modals & fake captchas
+            // 3. Ensure audio output is unmuted, volume is 100%, and media controls are displayed
+            function ensureAudioAndControls() {
+                var vids = document.querySelectorAll('video');
+                vids.forEach(function(v) {
+                    if (v.muted) {
+                        v.muted = false;
+                    }
+                    v.volume = 1.0;
+                    v.controls = true;
+                });
+            }
+
+            // 4. Active DOM node scrubber: continuously search and delete fake verification modals & fake captchas
             function scrubModals() {
+                ensureAudioAndControls();
                 var targets = document.querySelectorAll('div, section, modal, dialog, .overlay, .popup, .modal, p, span, form, button');
                 targets.forEach(function(el) {
                     // Do not remove video players or player containers
